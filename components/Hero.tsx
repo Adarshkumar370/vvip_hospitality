@@ -30,10 +30,12 @@ export default function Hero() {
                         <div key={index} className="relative flex-[0_0_100%] h-full">
                             <Image
                                 src={src}
-                                alt={`Hero background ${index + 1}`}
+                                alt={index === 0 ? "VVIP Hospitality luxurious hotel lobby" : index === 1 ? "Olive Stayz premium hotel room interior" : "VVIP Bakery professional kitchen"}
                                 fill
                                 className="object-cover opacity-40 dark:opacity-40 transition-opacity duration-1000"
                                 priority={index === 0}
+                                sizes="100vw"
+                                quality={85}
                             />
                         </div>
                     ))}

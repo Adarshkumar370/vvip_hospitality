@@ -30,7 +30,7 @@ export default function CorporateFeature() {
                                         <FileText size={20} />
                                     </div>
                                     <div>
-                                        <h4 className="text-foreground font-bold">GST Invoicing</h4>
+                                        <strong className="text-foreground font-bold block mb-1">GST Invoicing</strong>
                                         <p className="text-muted-foreground text-sm font-medium">Compliant billing for all business expenses.</p>
                                     </div>
                                 </div>
@@ -39,7 +39,7 @@ export default function CorporateFeature() {
                                         <Building2 size={20} />
                                     </div>
                                     <div>
-                                        <h4 className="text-foreground font-bold">Corporate Rates</h4>
+                                        <strong className="text-foreground font-bold block mb-1">Corporate Rates</strong>
                                         <p className="text-muted-foreground text-sm font-medium">Special pricing for stays exceeding 10 nights.</p>
                                     </div>
                                 </div>
@@ -48,7 +48,7 @@ export default function CorporateFeature() {
                                         <LayoutList size={20} />
                                     </div>
                                     <div>
-                                        <h4 className="text-foreground font-bold">Custom Menus</h4>
+                                        <strong className="text-foreground font-bold block mb-1">Custom Menus</strong>
                                         <p className="text-muted-foreground text-sm font-medium">Tailored bakery offerings for corporate cafes.</p>
                                     </div>
                                 </div>
@@ -57,13 +57,16 @@ export default function CorporateFeature() {
                                         <Briefcase size={20} />
                                     </div>
                                     <div>
-                                        <h4 className="text-foreground font-bold">B2B Delivery</h4>
+                                        <strong className="text-foreground font-bold block mb-1">B2B Delivery</strong>
                                         <p className="text-muted-foreground text-sm font-medium">Scheduled, reliable delivery for bulk orders.</p>
                                     </div>
                                 </div>
                             </div>
 
-                            <button className="bg-charcoal text-white dark:bg-white dark:text-charcoal px-10 py-4 rounded-full font-bold hover:bg-gold hover:text-white transition-all transform hover:-translate-y-1 shadow-lg">
+                            <button
+                                className="bg-charcoal text-white dark:bg-white dark:text-charcoal px-10 py-4 rounded-full font-bold hover:bg-gold hover:text-white transition-all transform hover:-translate-y-1 shadow-lg"
+                                aria-label="Inquire about business and corporate solutions"
+                            >
                                 Inquire for Business
                             </button>
                         </div>

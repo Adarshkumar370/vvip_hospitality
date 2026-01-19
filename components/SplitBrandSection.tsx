@@ -89,9 +89,9 @@ export default function SplitBrandSection() {
                             transition={{ duration: 0.8 }}
                             className="w-full lg:w-1/2"
                         >
-                            <h4 className={cn("text-lg font-bold tracking-widest uppercase mb-4", brand.accentColor)}>
+                            <p className={cn("text-lg font-bold tracking-widest uppercase mb-4", brand.accentColor)}>
                                 {brand.title}
-                            </h4>
+                            </p>
                             <h2 className="text-4xl md:text-5xl font-bold mb-6 leading-tight text-foreground">
                                 {brand.subtitle}
                             </h2>

@@ -34,13 +34,14 @@ export default function Footer() {
                         </div>
 
                         <div className="flex gap-4">
-                            {[Instagram, Facebook, Linkedin].map((Icon, i) => (
+                            {[{ Icon: Instagram, label: "Instagram" }, { Icon: Facebook, label: "Facebook" }, { Icon: Linkedin, label: "LinkedIn" }].map((social, i) => (
                                 <a
                                     key={i}
                                     href="#"
                                     className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center hover:bg-gold hover:text-white transition-all"
+                                    aria-label={social.label}
                                 >
-                                    <Icon size={20} />
+                                    <social.Icon size={20} aria-hidden="true" />
                                 </a>
                             ))}
                         </div>

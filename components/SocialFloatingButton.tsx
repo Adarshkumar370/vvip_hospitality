@@ -43,9 +43,9 @@ export default function SocialFloatingButton() {
                                 animate={{ opacity: 1, x: 0 }}
                                 transition={{ delay: idx * 0.05 }}
                                 className={`w-12 h-12 bg-charcoal text-white rounded-full flex items-center justify-center shadow-2xl border border-white/10 transition-all duration-300 ${link.color}`}
-                                title={link.label}
+                                aria-label={link.label}
                             >
-                                <link.icon size={20} />
+                                <link.icon size={20} aria-hidden="true" />
                             </motion.a>
                         ))}
                     </motion.div>
@@ -57,6 +57,8 @@ export default function SocialFloatingButton() {
                 onClick={() => setIsOpen(!isOpen)}
                 className={`w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-all duration-500 transform ${isOpen ? "bg-gold rotate-0" : "bg-charcoal hover:bg-gold"
                     } text-white border border-white/10 group`}
+                aria-label={isOpen ? "Close social media menu" : "Open social media menu"}
+                aria-expanded={isOpen}
             >
                 <motion.div
                     animate={{ rotate: isOpen ? 90 : 0 }}
