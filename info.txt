@@ -1,0 +1,83 @@
+🌐 Website Project Brief: VVIP Hospitality Group
+1. Design Tone & Brand Identity
+
+    Vibe: Professional, Trustworthy, "Ghar Jaisi" (Home-like) yet Tech-enabled.
+
+    Target Audience: Corporate employees (Noida), Medical tourists (Max/Yashoda), and B2B Cafe owners.
+
+    Core Color Palette Suggestion: Premium Gold/Black (for VVIP) or Olive Green/White (for Olive Stayz).
+
+2. Site Structure (Sitemap)
+
+    Home: Group Overview & Quick Links to Verticals.
+
+    Olive Stayz: Detailed Room listings, Amenities, and Medical/Long-stay focus.
+
+    VVIP Bakery: B2B Catalog and Corporate Partnership details.
+
+    Corporate/B2B: Bulk booking and Hospital tie-ups.
+
+    Contact Us: Map locations, WhatsApp integration.
+
+3. Page Content: Olive Stayz (The Hero Vertical)
+A. Room Comparison Table
+
+Developer Note: Please use a clean, side-by-side comparison layout.
+Feature	Superior Room	Executive Room
+View	Urban Interior	Private Balcony
+Occupancy	2–3 Adults	2–3 Adults
+Key Amenities	175L Fridge, AC, E-Card	175L Fridge, AC, E-Card
+Best For	Business Travelers	Long-stay Families
+B. The "Olive" Difference (USPs)
+
+    Transparency: "Pay-What-You-Spend" Electricity. (Individual meters so guests pay only for their own consumption).
+
+    The Fridge Factor: Every room features a Full-size 175L Refrigerator (Not a mini-bar).
+
+    Uninterrupted Power: 24/7 Inverter backup that supports even the AC.
+
+    Digital Access: Smart E-Card key entry and 200 Mbps+ Free Wi-Fi.
+
+C. Specialized Care (The Social Proof Section)
+
+    Medical Stays: Optimized for patients/families visiting Max Hospital and Yashoda Hospital.
+
+    Accessibility: Wheelchair support, accessible bathrooms, and dedicated elder-care assistance.
+
+    Safety: 24/7 Surveillance, Fire Safety protocols, and Doctor-on-Call/Ambulance services.
+
+D. Dining & Kitchen
+
+    Common Kitchen: Fully equipped shared space for home-cooked meals.
+
+    Zomato/Swiggy Friendly: Delivery allowed to the room.
+
+    In-House Dining: Breakfast and Dinner (Morning/Night) services available.
+
+4. Page Content: VVIP Bakery (B2B)
+
+    Headline: Your Premier B2B Cloud Kitchen Partner.
+
+    Services: Bulk supply for Cafes, Restaurants, and Corporate Events.
+
+    The VVIP Edge: Consistent gourmet quality, scheduled logistics, and custom sourdough/pastry menus.
+
+5. Technical Requirements for the Developer
+
+    WhatsApp Integration: A floating "Book Now" button that connects directly to +91 9999 000 000.
+
+    SEO Keywords to include: Budget stay near Advant Noida, Long stay apartments Sector 144, Medical tourism accommodation Noida, B2B Bakery Noida, Accessible stays near Max Hospital.
+
+    Dynamic Maps: Live Google Map embeds for Sector 142/144 and Kaushambi.
+
+    Mobile First: 80% of guests will book via mobile; the site must be ultra-fast.
+
+    Billing/Invoice Portal: A section for corporate partners to request GST-compliant invoices.
+
+6. Footer Details
+
+    HQ: Sector 142, Near Advant Navis Park, Noida, UP 201305.
+
+    Operations: Mon–Sat (10 AM - 6 PM).
+
+    Tagline: Treating every visitor as a Very Very Important Person.

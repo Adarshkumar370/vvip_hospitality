@@ -1,55 +1,26 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, Outfit } from "next/font/google";
 import "./globals.css";
+import Navbar from "@/components/layout/Navbar";
+import Footer from "@/components/layout/Footer";
+import WhatsAppButton from "@/components/ui/WhatsAppButton";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
   subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const outfit = Outfit({
   subsets: ["latin"],
+  variable: "--font-outfit",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "VVIP Hospitality - Premium Budget Stays & Professional Bakery Solutions",
-  description: "Redefining the standards of comfort and taste. From premium budget stays at Olive Stayz to professional B2B bakery solutions. Excellence Reimagined.",
-  keywords: ["VVIP Hospitality", "Olive Stayz", "VVIP Bakery", "budget hotel", "corporate stays", "B2B bakery", "Noida hotels"],
-  authors: [{ name: "VVIP Hospitality Group" }],
-  metadataBase: new URL('https://vvip-hospitality.vercel.app'),
-  openGraph: {
-    title: "VVIP Hospitality - Excellence Reimagined",
-    description: "Premium budget stays and professional bakery solutions. Redefining standards of comfort and taste.",
-    url: 'https://vvip-hospitality.vercel.app',
-    siteName: 'VVIP Hospitality',
-    locale: 'en_IN',
-    type: 'website',
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: "VVIP Hospitality - Excellence Reimagined",
-    description: "Premium budget stays and professional bakery solutions. Redefining standards of comfort and taste.",
-  },
-  viewport: {
-    width: 'device-width',
-    initialScale: 1,
-    maximumScale: 5,
-  },
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: {
-      index: true,
-      follow: true,
-      'max-video-preview': -1,
-      'max-image-preview': 'large',
-      'max-snippet': -1,
-    },
-  },
+  title: "VVIP Hospitality | Premium Stays & Bakery Services",
+  description: "Providing premium hospitality experiences and professional cloud kitchen services in Noida and beyond.",
 };
-
-import SocialFloatingButton from "@/components/SocialFloatingButton";
 
 export default function RootLayout({
   children,
@@ -57,12 +28,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        {children}
-        <SocialFloatingButton />
+    <html lang="en" className={`${inter.variable} ${outfit.variable} scroll-smooth`}>
+      <body className="font-sans antialiased bg-white text-brand-black">
+        <Navbar />
+        <main className="min-h-screen pt-20">
+          {children}
+        </main>
+        <Footer />
+        <WhatsAppButton />
       </body>
     </html>
   );
