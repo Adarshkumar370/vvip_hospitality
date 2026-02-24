@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { OLIVE_STAYZ } from "@/lib/constants";
+import { OLIVE_STAYZ } from "@/lib/constants/stayz";
 import { Check, Info, ShieldCheck, Accessibility, Laptop, Wifi, Wind, Zap } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";

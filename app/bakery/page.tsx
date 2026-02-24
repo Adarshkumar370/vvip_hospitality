@@ -1,17 +1,27 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { VVIP_BAKERY } from "@/lib/constants";
-import { ArrowRight, ChefHat, Truck, Award, BadgeCheck, UtensilsCrossed, ExternalLink } from "lucide-react";
+import { VVIP_BAKERY } from "@/lib/constants/bakery";
+import { ArrowRight, ChefHat, Truck, Award, BadgeCheck, UtensilsCrossed, ExternalLink, Briefcase, Wheat, LogIn } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
+import BakeryTestimonials from "@/components/bakery/BakeryTestimonials";
+
+const ICON_MAP: Record<string, any> = {
+    utensils: UtensilsCrossed,
+    briefcase: Briefcase,
+    wheat: Wheat,
+    award: Award,
+    truck: Truck,
+    "badge-check": BadgeCheck,
+};
 
 export default function VVIPBakery() {
     return (
         <div className="flex flex-col bg-white">
             {/* Premium Bakery Hero - Light */}
-            <section className="relative h-[60vh] min-h-[500px] flex items-center justify-center bg-brand-soft-gray overflow-hidden">
+            <section className="relative h-[60vh] min-h-[500px] flex items-center justify-center bg-brand-soft-gray overflow-hidden pt-20">
                 <div className="absolute top-0 right-0 w-1/2 h-full bg-white -skew-x-12 translate-x-1/4 z-0" />
 
                 <div className="relative z-10 text-center px-6">
@@ -21,7 +31,7 @@ export default function VVIPBakery() {
                         className="inline-flex items-center gap-2 px-6 py-2 rounded-full border border-brand-gold-bright/20 bg-white text-brand-gold-bright text-xs font-black uppercase tracking-[0.2em] mb-10 shadow-sm"
                     >
                         <ChefHat size={16} />
-                        B2B Cloud Kitchen Partner
+                        B2B Cloud Kitchen Service
                     </motion.div>
                     <motion.h1
                         initial={{ y: 20, opacity: 0 }}
@@ -52,24 +62,27 @@ export default function VVIPBakery() {
                         <span className="text-brand-gold-bright text-[10px] font-black uppercase tracking-[0.4em] mb-6 block">What We Offer</span>
                         <h2 className="text-4xl md:text-6xl font-serif font-black mb-12 tracking-tight leading-tight">Our Specialized <br /><span className="text-brand-gold-bright italic text-5xl md:text-7xl">B2B Services</span></h2>
                         <div className="space-y-10">
-                            {VVIP_BAKERY.services.map((service, idx) => (
-                                <motion.div
-                                    key={service}
-                                    initial={{ opacity: 0, x: -20 }}
-                                    whileInView={{ opacity: 1, x: 0 }}
-                                    transition={{ delay: idx * 0.1 }}
-                                    viewport={{ once: true }}
-                                    className="flex gap-8 group"
-                                >
-                                    <div className="w-16 h-16 rounded-2xl bg-brand-soft-gray flex items-center justify-center text-brand-olive-dark shrink-0 group-hover:bg-brand-olive-dark group-hover:text-white transition-all duration-500 shadow-sm">
-                                        <UtensilsCrossed size={28} />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-2xl font-serif font-black mb-2 tracking-tight">{service}</h3>
-                                        <p className="text-gray-500 text-base font-medium leading-relaxed">Consistent supply with gourmet quality standards tailored for your business needs.</p>
-                                    </div>
-                                </motion.div>
-                            ))}
+                            {VVIP_BAKERY.services.map((service, idx) => {
+                                const Icon = ICON_MAP[service.icon] || UtensilsCrossed;
+                                return (
+                                    <motion.div
+                                        key={service.title}
+                                        initial={{ opacity: 0, x: -20 }}
+                                        whileInView={{ opacity: 1, x: 0 }}
+                                        transition={{ delay: idx * 0.1 }}
+                                        viewport={{ once: true }}
+                                        className="flex gap-8 group"
+                                    >
+                                        <div className="w-16 h-16 rounded-2xl bg-brand-soft-gray flex items-center justify-center text-brand-olive-dark shrink-0 group-hover:bg-brand-olive-dark group-hover:text-white transition-all duration-500 shadow-sm">
+                                            <Icon size={28} />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-2xl font-serif font-black mb-2 tracking-tight">{service.title}</h3>
+                                            <p className="text-gray-500 text-base font-medium leading-relaxed">{service.description}</p>
+                                        </div>
+                                    </motion.div>
+                                );
+                            })}
                         </div>
                     </div>
                     <div className="relative group">
@@ -89,7 +102,7 @@ export default function VVIPBakery() {
                                 <BadgeCheck className="text-brand-gold-bright" size={32} />
                                 <span className="font-black text-2xl text-brand-olive-dark leading-none">GST</span>
                             </div>
-                            <p className="text-[10px] text-gray-400 uppercase tracking-[0.2em] font-black leading-none">Registered Partner</p>
+                            <p className="text-[10px] text-gray-400 uppercase tracking-[0.2em] font-black leading-none">Registered User</p>
                         </div>
                     </div>
                 </div>
@@ -100,24 +113,30 @@ export default function VVIPBakery() {
                 <div className="max-w-7xl mx-auto relative z-10">
                     <div className="text-center mb-24">
                         <h2 className="text-5xl md:text-7xl font-serif font-black mb-6 text-brand-olive-dark tracking-tight">The VVIP Edge</h2>
-                        <p className="text-gray-500 max-w-2xl mx-auto text-lg font-bold">Why cafes and corporate partners choose our kitchen for their supply chain.</p>
+                        <p className="text-gray-500 max-w-2xl mx-auto text-lg font-bold">Why cafes and corporate users choose our kitchen for their supply chain.</p>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-16 text-brand-olive-dark">
-                        {VVIP_BAKERY.edge.map((item, idx) => (
-                            <div key={item} className="flex flex-col items-center text-center group">
-                                <div className="w-24 h-24 rounded-full bg-white border border-gray-100 flex items-center justify-center text-brand-gold-bright mb-10 shadow-sm group-hover:bg-brand-olive-dark group-hover:text-white transition-all duration-500">
-                                    {idx === 0 ? <Award size={48} /> : idx === 1 ? <Truck size={48} /> : <BadgeCheck size={48} />}
+                        {VVIP_BAKERY.edge.map((item, idx) => {
+                            const Icon = ICON_MAP[item.icon] || Award;
+                            return (
+                                <div key={item.title} className="flex flex-col items-center text-center group">
+                                    <div className="w-24 h-24 rounded-full bg-white border border-gray-100 flex items-center justify-center text-brand-gold-bright mb-10 shadow-sm group-hover:bg-brand-olive-dark group-hover:text-white transition-all duration-500">
+                                        <Icon size={48} />
+                                    </div>
+                                    <h3 className="text-3xl font-serif font-black mb-5 tracking-tight">{item.title}</h3>
+                                    <p className="text-gray-500 text-base font-bold leading-relaxed">
+                                        {item.description}
+                                    </p>
                                 </div>
-                                <h3 className="text-3xl font-serif font-black mb-5 tracking-tight">{item}</h3>
-                                <p className="text-gray-500 text-base font-bold leading-relaxed">
-                                    We maintain peak gourmet quality through strict logistics and custom curation for every client.
-                                </p>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
             </section>
+
+            {/* Testimonials */}
+            <BakeryTestimonials />
 
             {/* B2B Catalog CTA - Light themed block */}
             <section className="py-40 px-6">
@@ -126,7 +145,7 @@ export default function VVIPBakery() {
 
                     <div className="relative z-10 flex flex-col items-center text-center">
                         <h2 className="text-brand-olive-dark text-4xl md:text-7xl font-serif font-black mb-12 leading-tight tracking-tight">
-                            Partner with the Best <br />
+                            Work with the Best <br />
                             <span className="text-brand-gold-bright italic">Cloud Kitchen</span>
                         </h2>
                         <div className="flex flex-col sm:flex-row gap-6 w-full max-w-xl">
@@ -134,7 +153,7 @@ export default function VVIPBakery() {
                                 href="/contact"
                                 className="flex-1 px-12 py-6 bg-brand-olive-dark text-white font-black rounded-2xl hover:bg-brand-gold-bright transition-all flex items-center justify-center gap-3 shadow-xl active:scale-95"
                             >
-                                Become a Partner
+                                Join Us
                                 <ArrowRight size={24} />
                             </Link>
                             <button className="flex-1 px-12 py-6 bg-white border-2 border-brand-olive-dark/10 text-brand-olive-dark font-black rounded-2xl hover:border-brand-gold-bright hover:text-brand-gold-bright transition-all flex items-center justify-center gap-3 shadow-sm active:scale-95">

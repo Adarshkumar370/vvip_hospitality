@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { Inter, Outfit } from "next/font/google";
 import "./globals.css";
-import Navbar from "@/components/layout/Navbar";
-import Footer from "@/components/layout/Footer";
+import ConditionalNavbar from "@/components/layout/ConditionalNavbar";
+import ConditionalFooter from "@/components/layout/ConditionalFooter";
+import MainLayoutWrapper from "@/components/layout/MainLayoutWrapper";
 import WhatsAppButton from "@/components/ui/WhatsAppButton";
 
 const inter = Inter({
@@ -30,11 +31,11 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} ${outfit.variable} scroll-smooth`}>
       <body className="font-sans antialiased bg-white text-brand-black">
-        <Navbar />
-        <main className="min-h-screen pt-20">
+        <ConditionalNavbar />
+        <MainLayoutWrapper>
           {children}
-        </main>
-        <Footer />
+        </MainLayoutWrapper>
+        <ConditionalFooter />
         <WhatsAppButton />
       </body>
     </html>

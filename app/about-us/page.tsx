@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { SITE_CONFIG } from "@/lib/constants";
+import { SITE_CONFIG } from "@/lib/constants/config";
 import { ShieldCheck, Heart, Users, Target, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";

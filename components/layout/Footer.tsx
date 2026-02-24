@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { SITE_CONFIG } from "@/lib/constants";
+import { SITE_CONFIG } from "@/lib/constants/config";
 import { Mail, MapPin, Phone, Instagram, Facebook, Clock } from "lucide-react";
 
 export default function Footer() {

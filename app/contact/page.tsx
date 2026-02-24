@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { SITE_CONFIG } from "@/lib/constants";
+import { SITE_CONFIG } from "@/lib/constants/config";
 import { Mail, Phone, MapPin, Send, MessageCircle, Clock, FileCheck } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
