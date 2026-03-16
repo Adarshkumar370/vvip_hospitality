@@ -19,7 +19,7 @@ const STAFF_ROOT = "/bakery/staff";
 // ---------------------------------------------------------------------------
 const rateLimitMap = new Map<string, { count: number; timer: ReturnType<typeof setTimeout> }>();
 
-export function proxy(request: NextRequest) {
+export function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
     const ip =
         request.headers.get("x-forwarded-for")?.split(",")[0].trim() ||

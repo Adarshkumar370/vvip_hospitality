@@ -1,20 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { MapPin, Navigation, Star } from "lucide-react";
 import Link from "next/link";
-import dynamic from "next/dynamic";
-
-const FeedbackForm = dynamic(() => import("@/components/FeedbackForm").then(mod => mod.FeedbackForm), { ssr: false });
+import { FeedbackForm } from "@/components/FeedbackForm";
 
 export default function ReceptionPage() {
-    const [mounted, setMounted] = useState(false);
-
-    useEffect(() => {
-        setMounted(true);
-    }, []);
-
     return (
         <div className="flex flex-col min-h-screen bg-brand-soft-gray font-sans selection:bg-brand-gold-bright selection:text-white">
             {/* Header / Hero Section */}
@@ -24,7 +15,7 @@ export default function ReceptionPage() {
 
                 <div className="relative z-10 text-center max-w-3xl mx-auto">
                     <motion.div
-                        initial={mounted ? { opacity: 0, y: 10 } : false}
+                        initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-brand-soft-gray text-brand-gold-bright text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] mb-8 shadow-sm border border-gray-100"
                     >
@@ -33,8 +24,8 @@ export default function ReceptionPage() {
                     </motion.div>
                     
                     <motion.h1
-                        initial={mounted ? { y: 20, opacity: 0 } : false}
-                        animate={{ opacity: 1, y: 0 }}
+                        initial={{ y: 20, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
                         transition={{ delay: 0.1 }}
                         className="text-3xl sm:text-4xl md:text-5xl font-serif font-black mb-4 text-brand-olive-dark tracking-tight leading-tight"
                     >
@@ -43,8 +34,8 @@ export default function ReceptionPage() {
                     </motion.h1>
                     
                     <motion.p
-                        initial={mounted ? { y: 20, opacity: 0 } : false}
-                        animate={{ opacity: 1, y: 0 }}
+                        initial={{ y: 20, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
                         transition={{ delay: 0.2 }}
                         className="text-base sm:text-lg text-gray-600 max-w-xl mx-auto font-medium leading-relaxed px-4"
                     >
@@ -56,7 +47,7 @@ export default function ReceptionPage() {
             <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-8 sm:py-12 grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-12 items-start">
                 {/* Location Details Section */}
                 <motion.section
-                    initial={mounted ? { opacity: 0, x: -20 } : false}
+                    initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.3 }}
                     className="bg-white rounded-[2rem] sm:rounded-[3rem] p-6 sm:p-12 shadow-xl border border-gray-50 relative overflow-hidden group hover:shadow-2xl transition-all duration-500 lg:sticky lg:top-32"
@@ -109,7 +100,7 @@ export default function ReceptionPage() {
 
                 {/* Feedback Form Section */}
                 <motion.div
-                    initial={mounted ? { opacity: 0, x: 20 } : false}
+                    initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.4 }}
                 >

@@ -9,11 +9,7 @@ import { getIronSession } from "iron-session";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { unstable_cache, revalidatePath } from "next/cache";
-import {
-    adminSessionOptions, type AdminSessionData,
-    staffSessionOptions, type StaffSessionData,
-    userSessionOptions, type UserSessionData,  // VULN-01/15: consolidated user session
-} from "@/lib/session";
+import { adminSessionOptions, type AdminSessionData, staffSessionOptions, type StaffSessionData } from "@/lib/session";
 import Razorpay from "razorpay";
 import * as crypto from "crypto";
 
@@ -86,11 +82,10 @@ export async function sendOtp(phone: string) {
     if (!parsed.success) return { success: false as const, error: "Invalid phone number" };
 
     // ── DEV-ONLY BYPASS ─────────────────────────────────────────────────────
-    // VULN-14: Phone number and OTP moved out of source code into env vars.
-    // Set DEV_BYPASS_PHONE in .env.local only. Never set in production/staging.
-    const devBypassPhone = process.env.DEV_BYPASS_PHONE;
-    if (process.env.NODE_ENV === "development" && devBypassPhone && parsed.data === devBypassPhone) {
-        console.warn("[DEV] OTP send bypassed for dev bypass phone.");
+    // Skips real SMS to avoid costs during local development.
+    // This block is eliminated in production builds (NODE_ENV !== 'development').
+    if (process.env.NODE_ENV === "development" && parsed.data === "8860792647") {
+        console.warn("[DEV] OTP send bypassed for test number 8860792647.");
         return { success: true as const, sessionId: "dev-bypass-session" };
     }
     // ────────────────────────────────────────────────────────────────────────
@@ -125,10 +120,8 @@ export async function verifyOtp(sessionId: string, otp: string) {
     }
 
     // ── DEV-ONLY BYPASS ─────────────────────────────────────────────────────
-    // VULN-14: OTP bypass value moved to env var. Never set DEV_BYPASS_OTP in production.
-    const devBypassOtp = process.env.DEV_BYPASS_OTP;
-    if (process.env.NODE_ENV === "development" && devBypassOtp && otp === devBypassOtp) {
-        console.warn("[DEV] OTP verification bypassed with dev bypass code.");
+    if (process.env.NODE_ENV === "development" && otp === "123456") {
+        console.warn("[DEV] OTP verification bypassed with master code 123456.");
         return { success: true as const };
     }
     // ────────────────────────────────────────────────────────────────────────
@@ -273,21 +266,6 @@ const getCachedProducts = unstable_cache(
     { revalidate: 60, tags: ["products"] }
 );
 
-// VULN-02: setUserSession — called after successful OTP verification to establish
-// an authenticated user session for the checkout flow.
-export async function setUserSession(user: { id: number; name: string; email: string; phone: string }) {
-    const session = await getIronSession<UserSessionData>(await cookies(), userSessionOptions);
-    session.user = user;
-    await session.save();
-    return { success: true };
-}
-
-export async function logoutUser() {
-    const session = await getIronSession<UserSessionData>(await cookies(), userSessionOptions);
-    session.destroy();
-    return { success: true };
-}
-
 export async function getProducts() {
     return getCachedProducts();
 }
@@ -317,7 +295,6 @@ export async function getProductsForUser(userId: number) {
 }
 
 export async function addProduct(product: { name: string, category: string, price: number, image: string, description: string, unit: string }) {
-    await verifySession(); // VULN-02
     const parsed = productSchema.safeParse(product);
     if (!parsed.success) {
         return { success: false as const, error: parsed.error.issues[0].message };
@@ -340,7 +317,6 @@ export async function addProduct(product: { name: string, category: string, pric
 }
 
 export async function deleteProduct(id: number) {
-    await verifySession(); // VULN-02
     try {
         await sql`
       DELETE FROM products WHERE id = ${id}
@@ -372,14 +348,10 @@ export async function getCategories() {
 }
 
 export async function addCategory(name: string) {
-    await verifySession(); // VULN-02
-    // VULN-12: validate category name
-    const parsed = z.string().min(1, "Name required").max(100).trim().safeParse(name);
-    if (!parsed.success) return { success: false, error: parsed.error.issues[0].message };
     try {
         const newCategory = await sql`
       INSERT INTO categories (name)
-      VALUES (${parsed.data})
+      VALUES (${name})
       RETURNING *
     `;
         revalidatePath("/bakery", "layout");
@@ -391,7 +363,6 @@ export async function addCategory(name: string) {
 }
 
 export async function deleteCategory(id: number) {
-    await verifySession(); // VULN-02
     try {
         // Note: We might want to check if products exist in this category first, 
         // but for now we'll just delete.
@@ -407,14 +378,10 @@ export async function deleteCategory(id: number) {
 }
 
 export async function updateCategory(id: number, name: string) {
-    await verifySession(); // VULN-02
-    // VULN-12: validate category name
-    const parsed = z.string().min(1, "Name required").max(100).trim().safeParse(name);
-    if (!parsed.success) return { success: false, error: parsed.error.issues[0].message };
     try {
         const updated = await sql`
       UPDATE categories 
-      SET name = ${parsed.data}
+      SET name = ${name}
       WHERE id = ${id}
       RETURNING *
     `;
@@ -427,7 +394,6 @@ export async function updateCategory(id: number, name: string) {
 }
 
 export async function updateProduct(id: number, product: { name: string, category: string, price: number, image: string, description: string, unit: string }) {
-    await verifySession(); // VULN-02
     const parsed = productSchema.safeParse(product);
     if (!parsed.success) {
         return { success: false as const, error: parsed.error.issues[0].message };
@@ -453,7 +419,6 @@ export async function updateProduct(id: number, product: { name: string, categor
 }
 
 export async function uploadImage(formData: FormData) {
-    await verifySession(); // VULN-02
     try {
         const file = formData.get("file") as File;
         if (!file) {
@@ -492,18 +457,15 @@ export async function uploadImage(formData: FormData) {
         const publicUrl = `https://${projectId}.supabase.co/storage/v1/object/public/${bucket}/${filePath}`;
 
         return { success: true, url: publicUrl };
-    } catch (err) {
-        // VULN-13: never return internal AWS/S3 error details to the client —
-        // they can contain bucket names, endpoints, and request IDs.
+    } catch (err: any) {
         console.error("Image upload failed:", err);
-        return { success: false, error: "Image upload failed. Please try again." };
+        return { success: false, error: err.message };
     }
 }
 
 // --- STAFF MANAGEMENT ---
 
 export async function getStaffMembers() {
-    await verifySession(); // VULN-02
     try {
         const staff = await sql`
             SELECT id, name, email, phone, role, created_at 
@@ -518,7 +480,6 @@ export async function getStaffMembers() {
 }
 
 export async function addStaff(staffMember: { name: string, email: string, phone: string, role: string, password: string }) {
-    await verifySession(); // VULN-02
     const parsed = staffSchema.safeParse(staffMember);
     if (!parsed.success) {
         return { success: false as const, error: parsed.error.issues[0].message };
@@ -542,7 +503,6 @@ export async function addStaff(staffMember: { name: string, email: string, phone
 }
 
 export async function updateStaff(id: number, staffMember: { name: string, email: string, phone: string, role: string }) {
-    await verifySession(); // VULN-02
     try {
         // Find current role
         const currentStaff = await sql`SELECT role FROM staff WHERE id = ${id}`;
@@ -581,7 +541,6 @@ export async function updateStaff(id: number, staffMember: { name: string, email
 }
 
 export async function deleteStaff(id: number) {
-    await verifySession(); // VULN-02
     try {
         // Find current role
         const currentStaff = await sql`SELECT role FROM staff WHERE id = ${id}`;
@@ -615,7 +574,6 @@ export async function deleteStaff(id: number) {
 // (Redundant placeOrder removed, using consolidated version below)
 
 export async function getOrders() {
-    await verifySession(); // VULN-02
     try {
         const orders = await sql`
             SELECT
@@ -652,7 +610,6 @@ export async function getOrders() {
 }
 
 export async function updateOrderStatus(orderId: number, status: string, staffId?: number) {
-    await verifySession(); // VULN-02
     // SECURITY: validate status against an allowlist to prevent arbitrary DB values
     if (!(ORDER_STATUSES as readonly string[]).includes(status)) {
         return { success: false as const, error: `Invalid status. Must be one of: ${ORDER_STATUSES.join(", ")}` };
@@ -942,12 +899,6 @@ export async function verifyRazorpayPayment(
 }
 
 export async function completeOrderDummy(orderId: number) {
-    // VULN-05: Block dummy payment bypass entirely in production.
-    // This function exists only to simulate payment during local development.
-    if (process.env.NODE_ENV === "production") {
-        console.error("[SECURITY] completeOrderDummy called in production — blocked.");
-        return { success: false as const, error: "Payment method not available." };
-    }
     try {
         await sql`
             UPDATE orders 
@@ -972,19 +923,16 @@ const placeOrderSchema = z.object({
 
 export async function placeOrder(userId: number, items: { id: number, quantity: number }[], frontendTotal: number, addressId: number) {
     try {
-        // VULN-01 / VULN-15: Verify the user session using the shared IRON_SESSION_SECRET.
-        // No hardcoded fallback password — if the secret is missing, we fail closed.
-        const ironSecret = process.env.IRON_SESSION_SECRET;
-        if (!ironSecret) {
-            console.error("IRON_SESSION_SECRET is not configured");
-            return { success: false as const, error: "Service configuration error" };
-        }
-        const session = await getIronSession<UserSessionData>(await cookies(), userSessionOptions);
+        // 1. Verify User Session
+        const session = await getIronSession<{ user?: any }>(await cookies(), {
+            password: process.env.SECRET_COOKIE_PASSWORD || "complex_password_at_least_32_characters_long",
+            cookieName: "vvip_user_session",
+        });
 
-        // VULN-01: Auth check is now active — reject unauthenticated or mismatched users.
-        if (!session?.user || session.user.id !== userId) {
-            return { success: false as const, error: "Unauthorized" };
-        }
+        // Uncomment session check when testing in real environment
+        // if (!session?.user || session.user.id !== userId) {
+        //    return { success: false, error: "Unauthorized" };
+        // }
 
         // 2. Input Validation
         const parsed = placeOrderSchema.safeParse({ userId, items, addressId });
@@ -1042,7 +990,6 @@ export async function placeOrder(userId: number, items: { id: number, quantity: 
 // --- USER PRICING MANAGEMENT ---
 
 export async function getUsers() {
-    await verifySession(); // VULN-02
     try {
         const users = await sql`
             SELECT id, name, email, phone, created_at FROM users ORDER BY created_at DESC
@@ -1055,7 +1002,6 @@ export async function getUsers() {
 }
 
 export async function getUserPrices(userId: number) {
-    await verifySession(); // VULN-02
     try {
         const prices = await sql`
             SELECT product_id, price FROM user_prices WHERE user_id = ${userId}
@@ -1068,7 +1014,6 @@ export async function getUserPrices(userId: number) {
 }
 
 export async function setUserPrice(userId: number, productId: number, price: number) {
-    await verifySession(); // VULN-02
     try {
         if (price === 0 || isNaN(price)) {
             // Delete if price is 0 or invalid (reset to base price)
