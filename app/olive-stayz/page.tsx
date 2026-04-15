@@ -1,266 +1,355 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { OLIVE_STAYZ } from "@/lib/constants/stayz";
-import { Check, Info, ShieldCheck, Accessibility, Laptop, Wifi, Wind, Zap } from "lucide-react";
-import Link from "next/link";
+import React, { useState, useEffect } from "react";
+import OliveStayzHeader from "@/components/olive-stayz/Header";
+import OliveStayzFooter from "@/components/olive-stayz/Footer";
 import Image from "next/image";
-import dynamic from "next/dynamic";
+import Link from "next/link";
+import { motion, AnimatePresence } from "framer-motion";
 
-const AmenitiesGrid = dynamic(() => import("@/components/AmenitiesGrid").then(mod => mod.AmenitiesGrid));
-const FAQSection = dynamic(() => import("@/components/FAQSection").then(mod => mod.FAQSection));
-const TestimonialsSection = dynamic(() => import("@/components/TestimonialsSection").then(mod => mod.TestimonialsSection));
-const PropertyRules = dynamic(() => import("@/components/PropertyRules").then(mod => mod.PropertyRules));
-
-const iconMap: Record<string, any> = {
-    zap: Zap,
-    refrigerator: Laptop,
-    "battery-charging": ShieldCheck,
-    key: Wifi,
-};
+const BACKGROUND_IMAGES = [
+    "/images/backrgound_1.png",
+    "/images/background_2.png"
+];
 
 export default function OliveStayz() {
+    const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setCurrentImageIndex((prev) => (prev + 1) % BACKGROUND_IMAGES.length);
+        }, 5000); // 5 seconds
+
+        return () => clearInterval(timer);
+    }, []);
+
     return (
-        <div className="flex flex-col bg-white">
-            {/* Mini Hero - Light & Airy */}
-            <section className="relative h-[45vh] min-h-[400px] flex items-center justify-center bg-brand-soft-gray overflow-hidden">
-                <div className="absolute top-0 left-0 w-64 h-64 bg-brand-gold-bright/10 rounded-full blur-3xl -ml-32 -mt-32" />
-                <div className="absolute bottom-0 right-0 w-96 h-96 bg-brand-olive-light/5 rounded-full blur-3xl -mr-48 -mb-48" />
+        <div className="min-h-screen bg-white">
+            <OliveStayzHeader />
 
-                <div className="relative z-10 text-center px-6">
-                    <motion.span
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="inline-block px-4 py-1 rounded-full bg-white text-brand-gold-bright text-[10px] font-black uppercase tracking-[0.2em] mb-6 shadow-sm border border-gray-100"
-                    >
-                        Premium Accommodations
-                    </motion.span>
-                    <motion.h1
-                        initial={{ y: 20, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        transition={{ delay: 0.1 }}
-                        className="text-5xl md:text-7xl font-serif font-black mb-8 text-brand-olive-dark tracking-tight"
-                    >
-                        {OLIVE_STAYZ.name}
-                    </motion.h1>
-                    <motion.p
-                        initial={{ y: 20, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        transition={{ delay: 0.2 }}
-                        className="text-lg md:text-xl text-gray-600 max-w-2xl mx-auto font-medium leading-relaxed"
-                    >
-                        {OLIVE_STAYZ.description}
-                    </motion.p>
-                </div>
-            </section>
+            {/* Hero Section with Responsive Slider Layout - Padded for Header */}
+            <section className="relative h-[calc(100vh-80px)] mt-20 w-full flex flex-col lg:grid lg:grid-cols-[45%_55%] overflow-hidden bg-white">
 
-            {/* Room Selection */}
-            <section className="py-32 px-6 max-w-7xl mx-auto w-full">
-                <div className="mb-20">
-                    <h2 className="text-4xl md:text-5xl font-serif font-black mb-6 text-brand-olive-dark flex items-center gap-6">
-                        Our Room Collection
-                        <div className="h-px flex-1 bg-gray-100" />
-                    </h2>
-                    <p className="text-gray-500 text-lg font-medium">Designed for comfort, optimized for long stays.</p>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-12 lg:gap-16">
-                    {OLIVE_STAYZ.rooms.map((room, idx) => (
-                        <motion.div
-                            key={room.name}
-                            initial={{ opacity: 0, y: 20 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            viewport={{ once: true }}
-                            className="flex flex-col bg-white rounded-[3rem] overflow-hidden shadow-premium border border-gray-50 hover:shadow-2xl transition-all duration-500"
-                        >
-                            <div className="h-80 bg-brand-soft-gray relative group">
+                {/* Left Side: Content (Desktop) / Overlay (Mobile) */}
+                <div className="relative z-20 flex flex-col justify-center px-6 md:px-12 lg:px-20 py-20 h-full bg-white order-2 lg:order-1 border-r border-gray-100">
+                    {/* Mobile Background (Hidden on Desktop) */}
+                    <div className="absolute inset-0 lg:hidden pointer-events-none">
+                        <AnimatePresence mode="wait">
+                            <motion.div
+                                key={BACKGROUND_IMAGES[currentImageIndex]}
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={{ duration: 1.5, ease: "easeInOut" }}
+                                className="absolute inset-0 z-0"
+                            >
                                 <Image
-                                    src={room.image}
-                                    alt={room.name}
+                                    src={BACKGROUND_IMAGES[currentImageIndex]}
+                                    alt="Olive Stayz Background Mobile"
                                     fill
-                                    sizes="(max-width: 768px) 100vw, 50vw"
-                                    className="object-cover group-hover:scale-105 transition-transform duration-700"
+                                    className="object-cover"
+                                    priority
                                 />
-                                <div className="absolute top-6 right-6 bg-white/95 backdrop-blur px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest text-brand-olive-dark shadow-xl">
-                                    {room.view}
-                                </div>
-                            </div>
-                            <div className="p-10 lg:p-14 flex flex-col flex-1">
-                                <div className="flex justify-between items-start mb-10">
-                                    <div>
-                                        <h3 className="text-3xl font-serif font-black text-brand-olive-dark mb-2">{room.name}</h3>
-                                        <p className="text-xs text-brand-gold-bright font-black uppercase tracking-[0.2em]">{room.bestFor}</p>
-                                    </div>
-                                    <div className="text-right">
-                                        <span className="text-[10px] uppercase font-black text-gray-300 block mb-1">Occupancy</span>
-                                        <span className="font-bold text-brand-olive-dark text-lg">{room.occupancy}</span>
-                                    </div>
-                                </div>
+                                {/* Dark Overlay for mobile readability */}
+                                <div className="absolute inset-0 bg-black/60 backdrop-brightness-75" />
+                            </motion.div>
+                        </AnimatePresence>
+                    </div>
 
-                                <div className="space-y-6 mb-12 flex-1">
-                                    <h4 className="text-[10px] font-black uppercase text-gray-400 tracking-[0.3em]">Key Amenities</h4>
-                                    <div className="grid grid-cols-2 gap-y-4 gap-x-6">
-                                        {room.amenities.map(amenity => (
-                                            <div key={amenity} className="flex items-center gap-3 text-sm text-gray-600 font-bold">
-                                                <div className="w-8 h-8 rounded-lg bg-brand-gold-bright/10 flex items-center justify-center text-brand-gold-bright shrink-0">
-                                                    <Check size={14} />
-                                                </div>
-                                                {amenity}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <Link href="/contact" className="w-full py-5 text-center rounded-2xl bg-brand-olive-dark text-white font-black text-lg hover:bg-brand-gold-bright transition-all shadow-lg active:scale-95">
-                                    Check Availability
-                                </Link>
-                            </div>
+                    {/* Content Area */}
+                    <div className="relative z-10 text-left">
+                        <motion.div
+                            initial={{ opacity: 0, x: -30 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: 0.3, duration: 1 }}
+                            className="mb-4"
+                        >
+                            <span className="text-[#C5A04D] font-black uppercase tracking-[0.3em] text-xs">Premium Living</span>
                         </motion.div>
-                    ))}
+                        <motion.h1
+                            initial={{ opacity: 0, x: -30 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: 0.5, duration: 1 }}
+                            className="text-5xl md:text-7xl lg:text-8xl font-black text-black mb-8 tracking-tighter leading-[0.9] lg:max-w-md"
+                        >
+                            <span className="lg:text-black text-white brightness-200 lg:brightness-100 uppercase">Olive <br /> Stayz</span>
+                        </motion.h1>
+                        <motion.p
+                            initial={{ opacity: 0, x: -30 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: 0.7, duration: 1 }}
+                            className="text-lg md:text-xl lg:text-2xl text-black/70 lg:text-black/60 max-w-lg font-medium leading-relaxed mb-12"
+                        >
+                            <span className="lg:text-inherit text-gray-200">
+                                Affordable luxury for long-term stays. Experience premium comfort and boutique style without the premium price tag.
+                            </span>
+                        </motion.p>
+
+                        {/* Desktop Action */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.9, duration: 1 }}
+                            className="hidden lg:block"
+                        >
+                            <Link href="/olive-stayz/rooms">
+                                <button className="px-10 py-5 bg-black text-white font-black uppercase tracking-widest text-sm rounded-full shadow-2xl hover:bg-[#C5A04D] transition-all active:scale-95">
+                                    Explore Our Collection
+                                </button>
+                            </Link>
+                        </motion.div>
+                    </div>
+                </div>
+
+                {/* Right Side: Image Slider (Desktop) */}
+                <div className="hidden lg:block relative h-full w-full overflow-hidden order-1 lg:order-2 bg-black">
+                    <AnimatePresence mode="wait">
+                        <motion.div
+                            key={BACKGROUND_IMAGES[currentImageIndex]}
+                            initial={{ opacity: 0, scale: 1.05 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 2, ease: "easeInOut" }}
+                            className="absolute inset-0"
+                        >
+                            <Image
+                                src={BACKGROUND_IMAGES[currentImageIndex]}
+                                alt="Olive Stayz Background Desktop"
+                                fill
+                                className="object-cover"
+                                priority
+                            />
+                        </motion.div>
+                    </AnimatePresence>
                 </div>
             </section>
 
-            {/* Why Olive Stayz (USPs) - Light Themed */}
-            <section className="py-32 px-6 bg-brand-soft-gray overflow-hidden relative">
-                <div className="absolute inset-0 bg-white/30 backdrop-blur-3xl" />
-                <div className="max-w-7xl mx-auto relative z-10">
-                    <div className="text-center mb-24">
-                        <span className="text-brand-gold-bright text-xs font-black uppercase tracking-[0.4em] mb-6 block">Why Stay With Us?</span>
-                        <h2 className="text-5xl md:text-7xl font-serif font-black text-brand-olive-dark tracking-tight">Why Olive Stayz</h2>
-                    </div>
+            {/* Property Highlights Section */}
+            <section className="py-24 px-6 bg-gray-50">
+                <div className="max-w-7xl mx-auto">
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true }}
+                        className="mb-16"
+                    >
+                        <span className="text-[#C5A04D] font-black uppercase tracking-widest text-sm block mb-4">The Experience</span>
+                        <h2 className="text-4xl md:text-5xl font-black text-black">Property Highlights</h2>
+                    </motion.div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-12">
-                        {OLIVE_STAYZ.usps.map((usp, idx) => {
-                            const Icon = iconMap[usp.icon] || Zap;
-                            return (
-                                <motion.div
-                                    key={usp.title}
-                                    initial={{ opacity: 0, y: 20 }}
-                                    whileInView={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: idx * 0.1 }}
-                                    viewport={{ once: true }}
-                                    className="bg-white p-10 rounded-[2.5rem] shadow-sm hover:shadow-xl transition-all duration-500 border border-gray-100 group"
-                                >
-                                    <div className="w-16 h-16 rounded-2xl bg-brand-soft-gray flex items-center justify-center text-brand-olive-dark mb-10 group-hover:bg-brand-gold-bright group-hover:text-white transition-all duration-500">
-                                        <Icon size={32} />
-                                    </div>
-                                    <h3 className="text-2xl font-serif font-black mb-4 text-brand-olive-dark tracking-tight">{usp.title}</h3>
-                                    <p className="text-sm text-gray-500 leading-relaxed font-bold">{usp.description}</p>
-                                </motion.div>
-                            );
-                        })}
-                    </div>
-                </div>
-            </section>
-
-            {/* Amenities Grid */}
-            <AmenitiesGrid amenities={OLIVE_STAYZ.amenitiesList} />
-
-            {/* Specialized Care */}
-            <section className="py-32 px-6 max-w-7xl mx-auto w-full">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-24 items-center">
-                    <div className="relative rounded-[3rem] overflow-hidden aspect-square bg-brand-soft-gray shadow-premium">
-                        <Image
-                            src="/images/specialized_care.png"
-                            alt="Specialized Medical Care"
-                            fill
-                            sizes="(max-width: 768px) 100vw, 50vw"
-                            className="object-cover"
-                        />
-                    </div>
-                    <div>
-                        <h2 className="text-4xl md:text-5xl font-serif font-black mb-10 text-brand-olive-dark tracking-tight leading-tight">{OLIVE_STAYZ.medicalCare.title}</h2>
-                        <p className="text-gray-600 mb-12 text-lg leading-relaxed font-medium">
-                            We specialize in providing comfortable, accessible accommodations for patients and families visiting local medical centers.
-                        </p>
-
-                        <div className="flex flex-wrap gap-4 mb-14">
-                            {OLIVE_STAYZ.medicalCare.focus.map(hosp => (
-                                <span key={hosp} className="px-6 py-3 rounded-xl bg-red-50 text-red-700 text-xs font-black flex items-center gap-3 border border-red-100 shadow-sm">
-                                    <span className="w-2 h-2 rounded-full bg-red-600 animate-pulse" />
-                                    Near {hosp}
-                                </span>
-                            ))}
-                        </div>
-
-                        <div className="space-y-6">
-                            {OLIVE_STAYZ.medicalCare.features.map(f => (
-                                <div key={f} className="flex items-center gap-6 text-brand-olive-dark font-black text-lg">
-                                    <div className="w-12 h-12 rounded-full bg-brand-soft-gray flex items-center justify-center shrink-0 border border-gray-100">
-                                        <Check size={24} className="text-brand-gold-bright" />
-                                    </div>
-                                    {f}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                        {HIGHLIGHTS_DATA.map((item, index) => (
+                            <motion.div
+                                key={index}
+                                initial={{ opacity: 0, y: 20 }}
+                                whileInView={{ opacity: 1, y: 0 }}
+                                viewport={{ once: true }}
+                                transition={{ delay: index * 0.1 }}
+                                className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100 hover:shadow-xl transition-all group"
+                            >
+                                <div className="text-[#C5A04D] mb-6 transition-transform group-hover:scale-110 duration-300">
+                                    {item.icon}
                                 </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            {/* FAQ Section */}
-            <FAQSection items={OLIVE_STAYZ.faqs} />
-
-            {/* Testimonials */}
-            <TestimonialsSection testimonials={OLIVE_STAYZ.testimonials} />
-
-            {/* Dining & Kitchen - Light */}
-            <section className="py-32 px-6 bg-brand-soft-gray rounded-[5rem] mx-6 mb-24 overflow-hidden relative">
-                <div className="max-w-7xl mx-auto relative z-10">
-                    <div className="flex flex-col md:flex-row justify-between items-end gap-10 mb-20">
-                        <div className="max-w-2xl">
-                            <h2 className="text-4xl md:text-6xl font-serif font-black mb-8 text-brand-olive-dark tracking-tight">{OLIVE_STAYZ.dining.title}</h2>
-                            <p className="text-gray-600 text-lg leading-relaxed font-bold">
-                                Food is heart. We provide a fully equipped common kitchen for home-cooked meals, while also supporting room delivery and in-house dining options.
-                            </p>
-                        </div>
-                        <Link href="/contact" className="px-12 py-5 bg-brand-olive-dark text-white font-black rounded-full hover:bg-brand-gold-bright transition-all shadow-xl active:scale-95">
-                            Inquire Dining
-                        </Link>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-                        {OLIVE_STAYZ.dining.features.map((f, idx) => (
-                            <div key={f} className="bg-white p-12 rounded-[2.5rem] shadow-sm hover:shadow-xl transition-all duration-500 border border-gray-100 flex flex-col h-full group">
-                                <div className="text-brand-gold-bright mb-10 font-serif text-5xl font-black opacity-30 group-hover:opacity-100 transition-opacity">0{idx + 1}</div>
-                                <h3 className="text-2xl font-serif font-black mb-8 text-brand-olive-dark tracking-tight leading-tight">{f}</h3>
-                                <div className="mt-auto pt-8">
-                                    <div className="bg-brand-soft-gray rounded-2xl aspect-video relative overflow-hidden border border-gray-100 shadow-inner">
-                                        <Image
-                                            src="/images/dining_area.png"
-                                            alt="Dining Detail"
-                                            fill
-                                            sizes="(max-width: 768px) 100vw, 33vw"
-                                            className="object-cover group-hover:scale-110 transition-transform duration-700"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
+                                <p className="text-gray-700 leading-relaxed font-medium">
+                                    {item.text}
+                                </p>
+                            </motion.div>
                         ))}
                     </div>
                 </div>
             </section>
 
-            {/* Property Rules */}
-            <PropertyRules rules={OLIVE_STAYZ.rules} />
-
-            {/* CTA Section - Light & Powerful */}
-            <section className="py-32 px-6 text-center">
-                <div className="max-w-5xl mx-auto bg-white p-14 md:p-24 rounded-[4rem] shadow-2xl relative overflow-hidden border border-gray-100">
-                    <div className="absolute top-0 right-0 w-80 h-80 bg-brand-gold-bright/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl" />
-                    <div className="absolute bottom-0 left-0 w-80 h-80 bg-brand-olive-light/5 rounded-full translate-y-1/2 -translate-x-1/2 blur-3xl" />
-
-                    <h2 className="text-4xl md:text-7xl font-serif font-black mb-12 relative z-10 text-brand-olive-dark tracking-tight leading-tight">
-                        Ready to Book Your <br />
-                        <span className="text-brand-gold-bright italic">Stay with VVIP?</span>
-                    </h2>
-                    <Link
-                        href="/contact"
-                        className="inline-block px-16 py-6 bg-brand-olive-dark text-white font-black rounded-full text-xl hover:bg-brand-gold-bright transition-all shadow-xl relative z-10 active:scale-95"
+            {/* Room Types Section - Animated List */}
+            <section className="py-24 px-6 bg-white overflow-hidden">
+                <div className="max-w-7xl mx-auto">
+                    <motion.div
+                        initial={{ opacity: 0, x: -30 }}
+                        whileInView={{ opacity: 1, x: 0 }}
+                        viewport={{ once: true }}
+                        className="mb-16"
                     >
-                        Contact Team
-                    </Link>
+                        <span className="text-[#C5A04D] font-black uppercase tracking-widest text-sm block mb-4">Accommodation</span>
+                        <h2 className="text-4xl md:text-5xl font-black text-black">Choose Your Stay</h2>
+                        <p className="mt-6 text-gray-500 max-w-2xl text-lg">
+                            Discover our elegantly designed rooms featuring modern interiors, premium furniture, and all the comforts of home.
+                        </p>
+                    </motion.div>
+
+                    <div className="space-y-6">
+                        {ROOM_DATA.map((room, index) => (
+                            <motion.div
+                                key={index}
+                                initial={{ opacity: 0, x: index % 2 === 0 ? -50 : 50 }}
+                                whileInView={{ opacity: 1, x: 0 }}
+                                viewport={{ once: true }}
+                                transition={{ duration: 0.8, ease: "easeOut" }}
+                                className="group relative bg-gray-50 rounded-[3rem] overflow-hidden flex flex-col lg:flex-row items-stretch min-h-[400px] border border-gray-100 hover:border-[#C5A04D]/30 transition-colors"
+                            >
+                                <div className="w-full lg:w-1/2 relative h-64 lg:h-auto">
+                                    <Image
+                                        src={room.image}
+                                        alt={room.name}
+                                        fill
+                                        className="object-cover transition-transform duration-700 group-hover:scale-105"
+                                    />
+                                    {room.badge && (
+                                        <div className="absolute top-8 left-8 bg-[#C5A04D] text-white px-6 py-2 rounded-full text-xs font-black uppercase tracking-widest shadow-xl">
+                                            {room.badge}
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="w-full lg:w-1/2 p-10 lg:p-16 flex flex-col justify-center">
+                                    <h3 className="text-3xl font-black text-black mb-4">{room.name}</h3>
+                                    <p className="text-[#C5A04D] font-bold mb-6">{room.size}</p>
+                                    <p className="text-gray-600 mb-8 leading-relaxed text-lg">
+                                        {room.description}
+                                    </p>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        {room.features.slice(0, 4).map((feat, i) => (
+                                            <div key={i} className="flex items-center gap-2 text-sm text-gray-500 font-medium">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-[#C5A04D]" />
+                                                {feat}
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="mt-10">
+                                        <Link href="/olive-stayz/rooms">
+                                            <button className="text-black font-black uppercase tracking-widest text-xs border-b-2 border-black pb-1 hover:text-[#C5A04D] hover:border-[#C5A04D] transition-all">
+                                                View Details
+                                            </button>
+                                        </Link>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        ))}
+                    </div>
                 </div>
             </section>
+
+            {/* Activities & Connectivity - Combined Section */}
+            <section className="py-24 px-6 bg-black text-white">
+                <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-20">
+                    {/* Activities */}
+                    <div>
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true }}
+                            className="mb-12"
+                        >
+                            <span className="text-[#C5A04D] font-black uppercase tracking-widest text-sm block mb-4">Explore</span>
+                            <h2 className="text-4xl font-black text-white">Nearby Attractions</h2>
+                        </motion.div>
+
+                        <div className="space-y-8">
+                            {ATTRACTIONS_DATA.map((item, index) => (
+                                <motion.div
+                                    key={index}
+                                    initial={{ opacity: 0, y: 20 }}
+                                    whileInView={{ opacity: 1, y: 0 }}
+                                    viewport={{ once: true }}
+                                    transition={{ delay: index * 0.1 }}
+                                    className="flex items-start gap-6 group"
+                                >
+                                    <div className="text-3xl font-black text-[#C5A04D] opacity-40 group-hover:opacity-100 transition-opacity">
+                                        {String(index + 1).padStart(2, '0')}
+                                    </div>
+                                    <div>
+                                        <h4 className="text-xl font-bold mb-2 text-white group-hover:text-[#C5A04D] transition-colors">{item.name}</h4>
+                                        <p className="text-gray-400 text-sm leading-relaxed">{item.details}</p>
+                                    </div>
+                                </motion.div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Reachability */}
+                    <div>
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true }}
+                            className="mb-12"
+                        >
+                            <span className="text-[#C5A04D] font-black uppercase tracking-widest text-sm block mb-4">Location</span>
+                            <h2 className="text-4xl font-black text-white">How to Reach Us</h2>
+                        </motion.div>
+
+                        <div className="bg-white/5 rounded-[2.5rem] p-10 border border-white/10 backdrop-blur-sm">
+                            <div className="space-y-6">
+                                {REACH_DATA.map((item, index) => (
+                                    <motion.div
+                                        key={index}
+                                        initial={{ opacity: 0, x: 20 }}
+                                        whileInView={{ opacity: 1, x: 0 }}
+                                        viewport={{ once: true }}
+                                        transition={{ delay: index * 0.05 }}
+                                        className="flex justify-between items-center py-4 border-b border-white/5 last:border-0"
+                                    >
+                                        <div className="flex items-center gap-4">
+                                            <div className="text-gray-500 group-hover:text-white transition-colors">
+                                                {item.icon}
+                                            </div>
+                                            <span className="text-gray-300 font-medium">{item.point}</span>
+                                        </div>
+                                        <span className="text-sm font-black text-[#C5A04D]">{item.dist}</span>
+                                    </motion.div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <OliveStayzFooter />
         </div>
     );
 }
+
+// --- Data ---
+
+const HIGHLIGHTS_DATA = [
+    { icon: <FaWifi size={32} />, text: "Complimentary high-speed Wi-Fi access throughout the property." },
+    { icon: <FaPlane size={32} />, text: "Seamless airport transfers for a hassle-free travel experience." },
+    { icon: <FaUserTie size={32} />, text: "Professional concierge services available for your every need." },
+    { icon: <GiWashingMachine size={32} />, text: "Efficient dry cleaning and laundry services on-site." },
+    { icon: <FaShieldAlt size={32} />, text: "In-room electronic safes for secure storage of your belongings." },
+    { icon: <FaSuitcase size={32} />, text: "Dedicated luggage storage and a travel desk for trip planning." },
+];
+
+const ROOM_DATA = [
+    {
+        name: "Superior Rooms",
+        size: "225 Sq. Ft.",
+        description: "Our Superior Rooms offer a perfect blend of style and comfort, featuring designer workspaces and premium boutique interiors.",
+        image: "/images/IMG_20260320_180335.jpg",
+        features: ["King/Twin Beds", "Free Wi-Fi", "Smart TV", "Modern Kitchenette", "Rain Shower"],
+        badge: null
+    },
+    {
+        name: "Executive Rooms",
+        size: "275 Sq. Ft.",
+        description: "Experience the ultimate in luxury with our Executive cases. These rooms feature a private balcony to enjoy fresh air and morning sunlight.",
+        image: "/images/IMG_20260319_202803.jpg",
+        features: ["King Bed", "Private Balcony", "Designer Workspace", "Smart TV", "Rain Shower", "Electronic Safe"],
+        badge: "Most Popular"
+    }
+];
+
+const ATTRACTIONS_DATA = [
+    { name: "Sanjay Lake", details: "Enjoy serene boating experiences just 8.6 km away." },
+    { name: "Retail Therapy", details: "Shipra Mall (4.5 km) and Mahagun Metro Mall (2.2 km) nearby." },
+    { name: "Akshardham Temple", details: "A magnificent spiritual site just a 10-minute drive away." },
+    { name: "Red Fort", details: "Historical exploration within a 25-minute scenic drive." },
+    { name: "City Landmarks", details: "India Gate and Connaught Place are just 20 minutes away." },
+];
+
+const REACH_DATA = [
+    { point: "IGI Airport", dist: "27.7 KM", icon: <FaPlane /> },
+    { point: "Hindon Airport", dist: "27.7 KM", icon: <FaPlane /> },
+    { point: "Railway Stations", dist: "15.1 KM", icon: <FaTrain /> },
+    { point: "Metro Stations", dist: "1.9 KM", icon: <FaSubway /> },
+];
+
+import { FaWifi, FaPlane, FaUserTie, FaShieldAlt, FaSuitcase, FaTrain, FaSubway } from "react-icons/fa";
+import { GiWashingMachine } from "react-icons/gi";

@@ -1,15 +1,15 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import Footer from "./Footer";
+import WhatsAppButton from "../ui/WhatsAppButton";
 
-export default function ConditionalFooter() {
+export default function ConditionalWhatsAppButton() {
     const pathname = usePathname();
 
-    // Hide global footer on bakery and olive-stayz routes
+    // Hide WhatsApp button on bakery and olive-stayz routes
     if (pathname?.startsWith("/bakery") || pathname?.startsWith("/olive-stayz")) {
         return null;
     }
 
-    return <Footer />;
+    return <WhatsAppButton />;
 }

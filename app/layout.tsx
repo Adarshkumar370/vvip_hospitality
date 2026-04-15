@@ -4,7 +4,7 @@ import "./globals.css";
 import ConditionalNavbar from "@/components/layout/ConditionalNavbar";
 import ConditionalFooter from "@/components/layout/ConditionalFooter";
 import MainLayoutWrapper from "@/components/layout/MainLayoutWrapper";
-import WhatsAppButton from "@/components/ui/WhatsAppButton";
+import ConditionalWhatsAppButton from "@/components/layout/ConditionalWhatsAppButton";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -36,7 +36,7 @@ export default function RootLayout({
           {children}
         </MainLayoutWrapper>
         <ConditionalFooter />
-        <WhatsAppButton />
+        <ConditionalWhatsAppButton />
       </body>
     </html>
   );

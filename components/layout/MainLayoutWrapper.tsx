@@ -10,9 +10,10 @@ export default function MainLayoutWrapper({
 }) {
     const pathname = usePathname();
     const isBakery = pathname?.startsWith("/bakery");
+    const isOliveStayz = pathname?.startsWith("/olive-stayz");
 
     return (
-        <main className={cn("min-h-screen", !isBakery && "pt-20")}>
+        <main className={cn("min-h-screen", (!isBakery && !isOliveStayz) && "pt-20")}>
             {children}
         </main>
     );
