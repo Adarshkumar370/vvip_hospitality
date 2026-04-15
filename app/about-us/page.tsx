@@ -126,7 +126,7 @@ export default function AboutUs() {
                 <div className="text-center mb-20">
                     <h2 className="text-4xl md:text-6xl font-serif font-black mb-8 text-brand-olive-dark tracking-tight">Our Reach</h2>
                     <p className="text-gray-600 text-lg max-w-2xl mx-auto font-medium">
-                        Based in Noida, we serve the NCR region with a focus on local expertise and global standards.
+                        Based in Kaushambi, Ghaziabad, we serve the NCR region with a focus on local expertise and global standards.
                     </p>
                 </div>
 

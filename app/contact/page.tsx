@@ -24,7 +24,7 @@ export default function Contact() {
                         Get in <span className="text-brand-gold-bright">Touch</span>
                     </motion.h1>
                     <p className="text-gray-500 max-w-2xl mx-auto">
-                        Whether you're looking for a premium stay near Advant Noida or a B2B bakery partner, we're here to help.
+                        Whether you&apos;re looking for a premium stay in Kaushambi, Ghaziabad or a B2B bakery partner, we&apos;re here to help.
                     </p>
                 </div>
             </section>

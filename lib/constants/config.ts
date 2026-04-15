@@ -1,15 +1,15 @@
 export const SITE_CONFIG = {
     name: "VVIP Hospitality",
     tagline: "Treating every visitor as a Very Very Important Person",
-    hq: "Sector 142, Near Advant Navis Park, Noida, UP 201305",
+    hq: "A188, Sector 14, Seemant Vihar Kaushambi, Ghaziabad, Uttar Pradesh 201010",
     whatsapp: "+919999000000",
     whatsappMessage: "Hello, I would like to inquire about VVIP Hospitality services.",
     keywords: [
-        "Budget stay near Advant Noida",
-        "Long stay apartments Sector 144",
-        "Medical tourism accommodation Noida",
-        "B2B Bakery Noida",
-        "Accessible stays near Max Hospital"
+        "Budget stay in Kaushambi Ghaziabad",
+        "Long stay apartments Kaushambi",
+        "Medical tourism accommodation Ghaziabad",
+        "B2B Bakery Ghaziabad",
+        "Accessible stays near Max Hospital Vaishali"
     ],
-    operations: "Mon–Sat (10 AM - 6 PM)",
+    operations: "Open 24/7",
 };

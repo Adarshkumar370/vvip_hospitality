@@ -323,7 +323,7 @@ const ROOM_DATA = [
         size: "225 Sq. Ft.",
         description: "Our Superior Rooms offer a perfect blend of style and comfort, featuring designer workspaces and premium boutique interiors.",
         image: "/images/IMG_20260320_180335.jpg",
-        features: ["King/Twin Beds", "Free Wi-Fi", "Smart TV", "Modern Kitchenette", "Rain Shower"],
+        features: ["Queen Size Bed", "Free Wi-Fi", "Smart TV", "Modern Kitchenette", "Rain Shower"],
         badge: null
     },
     {
@@ -331,7 +331,7 @@ const ROOM_DATA = [
         size: "275 Sq. Ft.",
         description: "Experience the ultimate in luxury with our Executive cases. These rooms feature a private balcony to enjoy fresh air and morning sunlight.",
         image: "/images/IMG_20260319_202803.jpg",
-        features: ["King Bed", "Private Balcony", "Designer Workspace", "Smart TV", "Rain Shower", "Electronic Safe"],
+        features: ["Queen Size Bed", "Private Balcony", "Designer Workspace", "Smart TV", "Rain Shower", "Electronic Safe"],
         badge: "Most Popular"
     }
 ];
@@ -345,10 +345,10 @@ const ATTRACTIONS_DATA = [
 ];
 
 const REACH_DATA = [
-    { point: "IGI Airport", dist: "27.7 KM", icon: <FaPlane /> },
-    { point: "Hindon Airport", dist: "27.7 KM", icon: <FaPlane /> },
-    { point: "Railway Stations", dist: "15.1 KM", icon: <FaTrain /> },
-    { point: "Metro Stations", dist: "1.9 KM", icon: <FaSubway /> },
+    { point: "IGI Airport", dist: "30.5 KM", icon: <FaPlane /> },
+    { point: "Hindon Airport", dist: "12.2 KM", icon: <FaPlane /> },
+    { point: "Anand Vihar Terminal", dist: "1.5 KM", icon: <FaTrain /> },
+    { point: "Kaushambi Metro", dist: "0.8 KM", icon: <FaSubway /> },
 ];
 
 import { FaWifi, FaPlane, FaUserTie, FaShieldAlt, FaSuitcase, FaTrain, FaSubway } from "react-icons/fa";

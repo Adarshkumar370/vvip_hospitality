@@ -17,7 +17,7 @@ const ROOM_DETAILS = [
         longDesc: "Our Superior Rooms are designed for the modern traveler who values both aesthetics and utility. Each room features meticulously curated boutique interiors, a dedicated designer workspace, and high-quality furnishings that create a home-away-from-home atmosphere.",
         image: "/images/IMG_20260320_180335.jpg",
         amenities: [
-            { icon: <FaBed />, text: "King/Twin Beds" },
+            { icon: <FaBed />, text: "Queen Size Bed" },
             { icon: <FaWifi />, text: "High-Speed Wi-Fi" },
             { icon: <FaTv />, text: "Smart TV" },
             { icon: <FaShower />, text: "Rain Shower" },
@@ -40,7 +40,7 @@ const ROOM_DETAILS = [
         image: "/images/IMG_20260319_202803.jpg",
         badge: "Most Popular",
         amenities: [
-            { icon: <FaBed />, text: "King Bed" },
+            { icon: <FaBed />, text: "Queen Size Bed" },
             { icon: <FaWifi />, text: "Ultra-Fast Wi-Fi" },
             { icon: <FaTv />, text: "55\" Smart TV" },
             { icon: <FaShower />, text: "Luxury Rain Shower" },

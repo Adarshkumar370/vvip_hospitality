@@ -76,7 +76,7 @@ export default function OliveStayzFooter() {
                         />
                     </Link>
                     <p className="text-gray-400 text-sm leading-relaxed">
-                        Premium long-term accommodations redefined with affordable luxury, right in the heart of Noida.
+                        Premium long-term accommodations redefined with affordable luxury, right in the heart of Kaushambi, Ghaziabad.
                     </p>
 
                     {/* Social Icons */}
@@ -105,8 +105,8 @@ export default function OliveStayzFooter() {
                         <li className="flex items-start gap-3.5 text-gray-400 text-sm leading-relaxed group">
                             <FaMapMarkerAlt className="mt-0.5 text-[#C5A04D] shrink-0" size={14} />
                             <span>
-                                Sector 142, Near Advant Navis Park,<br />
-                                Noida, Uttar Pradesh — 201305
+                                A188, Sector 14, Seemant Vihar Kaushambi,<br />
+                                Ghaziabad, Uttar Pradesh — 201010
                             </span>
                         </li>
                         <li>
@@ -129,7 +129,7 @@ export default function OliveStayzFooter() {
                         </li>
                         <li className="flex items-center gap-3.5 text-gray-400 text-sm">
                             <FaClock className="text-[#C5A04D] shrink-0" size={13} />
-                            Mon – Sat &nbsp;|&nbsp; 10 AM – 6 PM
+                            Open 24/7
                         </li>
                     </ul>
                 </div>
@@ -172,8 +172,8 @@ export default function OliveStayzFooter() {
                             <div>
                                 <p className="text-white font-bold text-sm mb-1">Olive Stayz</p>
                                 <p className="text-gray-400 text-xs leading-relaxed">
-                                    Sector 142, Near Advant Navis Park,<br />
-                                    Noida, Uttar Pradesh — 201305
+                                    A188, Sector 14, Seemant Vihar Kaushambi,<br />
+                                    Ghaziabad, Uttar Pradesh — 201010
                                 </p>
                             </div>
                         </div>
@@ -183,8 +183,8 @@ export default function OliveStayzFooter() {
                         </div>
                     </a>
                     <p className="mt-4 text-gray-500 text-xs leading-relaxed">
-                        Mon – Sat &nbsp;|&nbsp; 10 AM – 6 PM<br />
-                        Near Advant Navis Business Park
+                        Open 24/7<br />
+                        Next to Radisson Blu Hotel
                     </p>
                 </div>
             </div>
