@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { ShoppingCart, Settings, LogIn, User as UserIcon, Menu, X, LogOut as LogOutIcon } from "lucide-react";
@@ -19,6 +20,8 @@ export default function BakeryNavbar() {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
     const pathname = usePathname();
+    const isMainBakeryPage = pathname === "/bakery";
+    const showSolidNav = isScrolled || !isMainBakeryPage;
 
     const handleLogout = () => {
         logout();
@@ -44,37 +47,51 @@ export default function BakeryNavbar() {
             <nav
                 className={cn(
                     "fixed top-0 left-0 right-0 z-50 transition-all duration-500 px-6 py-6",
-                    isScrolled ? "py-4" : "py-8"
+                    showSolidNav ? "py-4" : "py-8"
                 )}
             >
                 <div
                     className={cn(
-                        "max-w-7xl mx-auto rounded-[2rem] transition-all duration-500 flex items-center justify-between px-8 py-4 border border-white/20",
-                        isScrolled
-                            ? "bg-white/80 backdrop-blur-xl shadow-premium py-3"
-                            : "bg-white/40 backdrop-blur-md"
+                        "max-w-7xl mx-auto rounded-full transition-all duration-700 flex items-center justify-between px-10 py-4 border",
+                        showSolidNav
+                            ? "bg-white/90 backdrop-blur-2xl shadow-premium py-3 border-gray-100"
+                            : "bg-transparent border-transparent"
                     )}
                 >
                     {/* Logo */}
-                    <Link href="/bakery" className="flex items-center gap-3 group">
-                        <div className="w-10 h-10 bg-brand-olive-dark rounded-xl flex items-center justify-center text-brand-gold-bright group-hover:rotate-12 transition-transform shadow-lg">
-                            <span className="font-serif font-black text-xl">V</span>
+                    <Link href="/bakery" className="flex items-center gap-4 group">
+                        <div className="relative w-12 h-12 overflow-hidden rounded-full shadow-2xl group-hover:rotate-[360deg] transition-transform duration-1000 border-2 border-white/20">
+                            <Image
+                                src="/images/bakery_logo.jpeg"
+                                alt="Swiss Affaire Logo"
+                                fill
+                                className="object-cover"
+                            />
                         </div>
-                        <span className="text-brand-olive-dark font-serif font-black text-xl tracking-tight">VVIP Bakery</span>
+                        <span className={cn(
+                            "font-serif font-black text-2xl tracking-tighter transition-colors duration-500",
+                            showSolidNav ? "text-brand-olive-dark" : "text-white"
+                        )}>Swiss Affaire</span>
                     </Link>
 
                     {/* Desktop Nav */}
-                    <div className="hidden md:flex items-center gap-10">
+                    <div className="hidden md:flex items-center gap-12">
                         {navLinks.map((link) => (
                             <Link
                                 key={link.name}
                                 href={link.href}
                                 className={cn(
-                                    "text-sm font-black uppercase tracking-widest transition-all hover:text-brand-gold-bright",
-                                    pathname === link.href ? "text-brand-gold-bright" : "text-brand-olive-dark/60"
+                                    "text-[10px] font-black uppercase tracking-[0.3em] transition-all relative group",
+                                    showSolidNav 
+                                        ? (pathname === link.href ? "text-brand-gold-bright" : "text-brand-olive-dark/60 hover:text-brand-olive-dark") 
+                                        : (pathname === link.href ? "text-brand-gold-bright" : "text-white/70 hover:text-white")
                                 )}
                             >
                                 {link.name}
+                                <span className={cn(
+                                    "absolute -bottom-2 left-0 w-0 h-[2px] bg-brand-gold-bright transition-all group-hover:w-full",
+                                    pathname === link.href && "w-full"
+                                )} />
                             </Link>
                         ))}
                     </div>
@@ -83,17 +100,23 @@ export default function BakeryNavbar() {
                     <div className="flex items-center gap-4">
                         <button
                             onClick={() => setIsCartOpen(true)}
-                            className="p-3 text-brand-olive-dark/60 hover:text-brand-gold-bright transition-colors relative"
+                            className={cn(
+                                "p-3 transition-colors relative",
+                                showSolidNav ? "text-brand-olive-dark/60 hover:text-brand-gold-bright" : "text-white/60 hover:text-white"
+                            )}
                         >
-                            <ShoppingCart size={20} strokeWidth={2.5} />
+                            <ShoppingCart size={22} strokeWidth={2.5} />
                             {totalItems > 0 && (
-                                <span className="absolute top-2 right-2 w-4 h-4 bg-brand-gold-bright rounded-full border-2 border-white text-[8px] flex items-center justify-center text-white font-black">
+                                <span className="absolute top-2 right-2 w-5 h-5 bg-brand-gold-bright rounded-full border-2 border-white text-[9px] flex items-center justify-center text-white font-black shadow-lg">
                                     {totalItems}
                                 </span>
                             )}
                         </button>
 
-                        <div className="h-6 w-[1.5px] bg-brand-olive-dark/10 mx-2 hidden sm:block" />
+                        <div className={cn(
+                            "h-6 w-[1.5px] mx-2 hidden sm:block transition-colors",
+                            showSolidNav ? "bg-brand-olive-dark/10" : "bg-white/10"
+                        )} />
 
                         {user ? (
                             <div className="relative">
@@ -102,10 +125,16 @@ export default function BakeryNavbar() {
                                     className="flex items-center gap-3 pl-2 group"
                                 >
                                     <div className="hidden sm:flex flex-col items-end">
-                                        <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest leading-none mb-1">Welcome</span>
-                                        <span className="text-sm font-black text-brand-olive-dark leading-none">{user.name}</span>
+                                        <span className="text-[9px] text-gray-400 font-black uppercase tracking-widest leading-none mb-1">Account</span>
+                                        <span className={cn(
+                                            "text-xs font-black leading-none transition-colors",
+                                            showSolidNav ? "text-brand-olive-dark" : "text-white"
+                                        )}>{user.name}</span>
                                     </div>
-                                    <div className="w-10 h-10 bg-brand-soft-gray group-hover:bg-brand-olive-dark group-hover:text-white rounded-xl flex items-center justify-center text-brand-olive-dark transition-all shadow-sm">
+                                    <div className={cn(
+                                        "w-11 h-11 rounded-full flex items-center justify-center transition-all shadow-premium",
+                                        showSolidNav ? "bg-brand-soft-gray text-brand-olive-dark" : "bg-white/10 text-white border border-white/20"
+                                    )}>
                                         <UserIcon size={20} />
                                     </div>
                                 </button>
@@ -146,19 +175,27 @@ export default function BakeryNavbar() {
                         ) : (
                             <button
                                 onClick={() => setIsAuthModalOpen(true)}
-                                className="flex items-center gap-3 px-6 py-3 bg-brand-olive-dark text-white rounded-xl font-black text-sm hover:bg-brand-gold-bright transition-all shadow-lg active:scale-95 group"
+                                className={cn(
+                                    "flex items-center gap-3 px-8 py-3 rounded-full font-black text-[10px] uppercase tracking-[0.2em] transition-all shadow-xl active:scale-95 group",
+                                    showSolidNav 
+                                        ? "bg-brand-olive-dark text-white hover:bg-brand-gold-bright" 
+                                        : "bg-white text-brand-olive-dark hover:bg-brand-gold-bright hover:text-white"
+                                )}
                             >
-                                <LogIn size={18} className="group-hover:translate-x-1 transition-transform" />
-                                <span className="hidden sm:inline">Login</span>
+                                <LogIn size={16} className="group-hover:translate-x-1 transition-transform" />
+                                <span className="hidden sm:inline">Partner Login</span>
                             </button>
                         )}
 
                         {/* Mobile Toggle */}
                         <button
-                            className="md:hidden p-3 text-brand-olive-dark"
+                            className={cn(
+                                "md:hidden p-3 transition-colors",
+                                showSolidNav ? "text-brand-olive-dark" : "text-white"
+                            )}
                             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                         >
-                            {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+                            {isMobileMenuOpen ? <X size={28} /> : <Menu size={28} />}
                         </button>
                     </div>
                 </div>

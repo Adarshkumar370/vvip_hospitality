@@ -64,7 +64,7 @@ export default function AboutUs() {
                                 Founded with a singular vision, VVIP Hospitality group set out to bridge the gap between "standard services" and "genuine hospitality." The name "VVIP" reflects our core promise: to treat every visitor, guest, and partner as a Very Very Important Person.
                             </p>
                             <p>
-                                What started as a boutique accommodation project in Kaushambi has now evolved into a multi-vertical hospitality group, spanning premium long-stays with <strong>Olive Stayz</strong> and professional B2B culinary solutions through <strong>VVIP Bakery</strong>.
+                                What started as a boutique accommodation project in Kaushambi has now evolved into a multi-vertical hospitality group, spanning premium long-stays with <strong>Olive Stayz</strong> and professional B2B culinary solutions through <strong>Swiss Affaire</strong>.
                             </p>
                             <p>
                                 Our growth is powered by a commitment to data-driven transparency, whether it's our "Pay-What-You-Spend" electricity model or our strictly monitored gourmet quality protocols in our cloud kitchens.

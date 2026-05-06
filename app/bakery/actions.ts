@@ -9,7 +9,7 @@ import { getIronSession } from "iron-session";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { unstable_cache, revalidatePath } from "next/cache";
-import { adminSessionOptions, type AdminSessionData, staffSessionOptions, type StaffSessionData } from "@/lib/session";
+import { adminSessionOptions, type AdminSessionData, staffSessionOptions, type StaffSessionData, userSessionOptions, type UserSessionData } from "@/lib/session";
 import Razorpay from "razorpay";
 import * as crypto from "crypto";
 
@@ -63,6 +63,11 @@ const ALLOWED_MIME_EXTENSIONS: Record<string, string> = {
 // ---------------------------------------------------------------------------
 async function getAdminSessionInternal() {
     return getIronSession<AdminSessionData>(await cookies(), adminSessionOptions);
+}
+
+export async function getUserSession() {
+    const session = await getIronSession<UserSessionData>(await cookies(), userSessionOptions);
+    return session.user;
 }
 
 /** Verify the caller is an authenticated admin. Throws/redirects if not. */
@@ -180,11 +185,43 @@ export async function registerUser(phone: string, name: string, email: string) {
             VALUES (${parsed.data.phone}, ${parsed.data.name}, ${parsed.data.email})
             RETURNING id, name, email, phone
         `;
-        return { success: true as const, user: users[0] };
+        
+        const user = users[0];
+        const session = await getIronSession<UserSessionData>(await cookies(), userSessionOptions);
+        session.user = user as any;
+        await session.save();
+
+        return { success: true as const, user };
     } catch (err) {
         console.error("Error registering user:", err);
         return { success: false as const, error: "Failed to register user. Email or phone may already be in use." };
     }
+}
+
+export async function loginUser(phone: string) {
+    const result = await checkUser(phone);
+    if (result.exists && result.user) {
+        const session = await getIronSession<UserSessionData>(await cookies(), userSessionOptions);
+        session.user = result.user as any;
+        await session.save();
+        return { success: true, user: result.user };
+    }
+    return { success: false, error: "User not found" };
+}
+
+export async function syncUserSession(user: { id: number, name: string, email: string, phone: string }) {
+    const session = await getIronSession<UserSessionData>(await cookies(), userSessionOptions);
+    if (!session.user) {
+        session.user = user as any;
+        await session.save();
+        return { success: true };
+    }
+    return { success: false, alreadySynced: true };
+}
+
+export async function logoutUser() {
+    const session = await getIronSession<UserSessionData>(await cookies(), userSessionOptions);
+    session.destroy();
 }
 // ---------------------------------------------------------------------------
 // Admin Auth
@@ -271,27 +308,35 @@ export async function getProducts() {
 }
 
 export async function getProductsForUser(userId: number) {
-    try {
-        const products = await sql`
-            SELECT 
-                p.*,
-                COALESCE(up.price, p.price) as effective_price,
-                CASE WHEN up.price IS NOT NULL THEN true ELSE false END as is_custom_price
-            FROM products p
-            LEFT JOIN user_prices up ON p.id = up.product_id AND up.user_id = ${userId}
-            ORDER BY p.created_at DESC
-        `;
-        // Map effective_price back to price for easy frontend usage
-        const productsWithPrice = products.map((p: any) => ({
-            ...p,
-            original_price: p.price,
-            price: p.effective_price
-        }));
-        return { success: true, products: productsWithPrice };
-    } catch (err) {
-        console.error("Failed to fetch products for user:", err);
-        return { success: false, error: "Database error" };
-    }
+    const fetcher = unstable_cache(
+        async (uId: number) => {
+            try {
+                const products = await sql`
+                    SELECT 
+                        p.*,
+                        COALESCE(up.price, p.price) as effective_price,
+                        CASE WHEN up.price IS NOT NULL THEN true ELSE false END as is_custom_price
+                    FROM products p
+                    LEFT JOIN user_prices up ON p.id = up.product_id AND up.user_id = ${uId}
+                    ORDER BY p.category ASC, p.name ASC
+                `;
+                return { 
+                    success: true, 
+                    products: products.map((p: any) => ({
+                        ...p,
+                        original_price: p.price,
+                        price: parseFloat(p.effective_price)
+                    })) 
+                };
+            } catch (err) {
+                console.error("Failed to fetch products for user:", err);
+                return { success: false, error: "Database error" };
+            }
+        },
+        [`user-products-${userId}`],
+        { revalidate: 300, tags: ["products", `user-products-${userId}`] }
+    );
+    return fetcher(userId);
 }
 
 export async function addProduct(product: { name: string, category: string, price: number, image: string, description: string, unit: string }) {
@@ -339,8 +384,8 @@ const getCachedCategories = unstable_cache(
             return { success: false, error: "Database error" };
         }
     },
-    ["bakery-categories"],
-    { revalidate: 3600, tags: ["categories"] }
+    ["bakery-categories-v3"],
+    { revalidate: 300, tags: ["categories"] }
 );
 
 export async function getCategories() {

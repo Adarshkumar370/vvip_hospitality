@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { syncUserSession } from "@/app/bakery/actions";
 
 interface User {
     id: number;
@@ -26,7 +27,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const savedUser = localStorage.getItem("vvip_bakery_user");
         if (savedUser) {
             try {
-                setUser(JSON.parse(savedUser));
+                const userData = JSON.parse(savedUser);
+                setUser(userData);
+                // Sync with server cookie if it's missing
+                syncUserSession(userData);
             } catch (e) {
                 console.error("Failed to parse saved user", e);
             }

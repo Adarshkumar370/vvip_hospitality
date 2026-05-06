@@ -39,3 +39,23 @@ export const staffSessionOptions: SessionOptions = {
         path: "/",
     },
 };
+export interface UserSessionData {
+    user?: {
+        id: number;
+        name: string;
+        email: string;
+        phone: string;
+    }
+}
+
+export const userSessionOptions: SessionOptions = {
+    password: process.env.IRON_SESSION_SECRET as string,
+    cookieName: "vvip_user_session",
+    cookieOptions: {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 60 * 60 * 24 * 30, // 30 days
+        path: "/",
+    },
+};

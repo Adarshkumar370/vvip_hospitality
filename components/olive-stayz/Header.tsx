@@ -119,14 +119,17 @@ export default function OliveStayzHeader() {
                         </a>
                     </div>
 
-                    <button
+                    <a
+                        href="https://app.mmyt.co/Xm2V/r96ansxl"
+                        target="_blank"
+                        rel="noopener noreferrer"
                         className={cn(
-                            "hidden md:block px-6 py-2.5 rounded-full text-xs font-black uppercase tracking-widest transition-all active:scale-95 shadow-lg",
+                            "hidden md:block px-6 py-2.5 rounded-full text-xs font-black uppercase tracking-widest transition-all active:scale-95 shadow-lg text-center",
                             "bg-black text-white hover:bg-[#376C34] border-2 border-transparent"
                         )}
                     >
-                        Book a Room
-                    </button>
+                        Book Now
+                    </a>
 
                     {/* Mobile Hamburger Menu Trigger */}
                     <button
@@ -166,9 +169,14 @@ export default function OliveStayzHeader() {
                         </nav>
                         
                         <div className="mt-10 pt-10 border-t border-gray-100 flex flex-col items-center gap-8 w-full">
-                            <button className="w-full py-5 bg-[#376C34] text-white font-black uppercase tracking-widest rounded-full shadow-lg active:scale-95 transition-all">
-                                Book a Room
-                            </button>
+                            <a 
+                                href="https://app.mmyt.co/Xm2V/r96ansxl"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="w-full py-5 bg-[#376C34] text-white font-black uppercase tracking-widest rounded-full shadow-lg active:scale-95 transition-all text-center"
+                            >
+                                Book Now
+                            </a>
                         </div>
                     </motion.div>
                 )}

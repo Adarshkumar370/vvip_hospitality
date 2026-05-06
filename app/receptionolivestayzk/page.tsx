@@ -4,12 +4,14 @@ import { motion } from "framer-motion";
 import { MapPin, Navigation, Star } from "lucide-react";
 import Link from "next/link";
 import { FeedbackForm } from "@/components/FeedbackForm";
+import OliveStayzHeader from "@/components/olive-stayz/Header";
 
 export default function ReceptionPage() {
     return (
         <div className="flex flex-col min-h-screen bg-brand-soft-gray font-sans selection:bg-brand-gold-bright selection:text-white">
+            <OliveStayzHeader />
             {/* Header / Hero Section */}
-            <section className="relative pt-16 sm:pt-20 pb-8 px-6 flex items-center justify-center bg-white overflow-hidden rounded-b-[2rem] sm:rounded-b-[4rem] shadow-premium z-10">
+            <section className="relative pt-28 sm:pt-32 pb-8 px-6 flex items-center justify-center bg-white overflow-hidden rounded-b-[2rem] sm:rounded-b-[4rem] shadow-premium z-10">
                 <div className="absolute top-0 right-0 w-96 h-96 bg-brand-gold-bright/5 rounded-full blur-3xl -mt-48 -mr-48" />
                 <div className="absolute bottom-0 left-0 w-96 h-96 bg-brand-olive-light/5 rounded-full blur-3xl -mb-48 -ml-48" />
 

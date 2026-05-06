@@ -105,7 +105,7 @@ export default function CheckoutPage() {
                 key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID, // Ensure this is set in your env
                 amount: razorpayRes.amount,
                 currency: "INR",
-                name: "VVIP Bakery",
+                name: "Swiss Affaire",
                 description: "User Order",
                 order_id: razorpayRes.orderId,
                 handler: async (response: any) => {

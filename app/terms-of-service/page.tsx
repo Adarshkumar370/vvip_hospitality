@@ -26,7 +26,7 @@ export default function TermsOfService() {
                         <section>
                             <h2 className="text-2xl font-serif font-bold text-brand-olive-dark mb-4 italic">2. Use of Services</h2>
                             <p>
-                                Our services, including Olive Stayz and VVIP Bakery, are provided for your personal or business use as specified in our agreements. Any unauthorized use of our services is strictly prohibited.
+                                Our services, including Olive Stayz and Swiss Affaire, are provided for your personal or business use as specified in our agreements. Any unauthorized use of our services is strictly prohibited.
                             </p>
                         </section>
 

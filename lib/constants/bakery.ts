@@ -1,5 +1,5 @@
 export const VVIP_BAKERY = {
-    name: "VVIP Bakery",
+    name: "Swiss Affaire",
     headline: "Your Premier B2B Cloud Kitchen Partner",
     services: [
         {
@@ -63,5 +63,11 @@ export const VVIP_BAKERY = {
             review: "Custom menu curation allowed us to offer unique pastries that our customers absolutely love.",
             stars: 5,
         },
+    ],
+    stats: [
+        { label: "Partner Cafes", value: "50+" },
+        { label: "Daily Deliveries", value: "1,200+" },
+        { label: "Expert Chefs", value: "15+" },
+        { label: "Unique Products", value: "80+" },
     ],
 };

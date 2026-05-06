@@ -47,7 +47,7 @@ export function Verticals() {
                         </Link>
                     </motion.div>
 
-                    {/* VVIP Bakery Card */}
+                    {/* Swiss Affaire Card */}
                     <motion.div
                         whileHover={{ y: -10 }}
                         className="group relative overflow-hidden rounded-[3rem] bg-brand-soft-gray p-10 lg:p-16 flex flex-col justify-between border border-gray-100/50 shadow-sm"
@@ -56,7 +56,7 @@ export function Verticals() {
                             <div className="w-20 h-20 rounded-3xl bg-white flex items-center justify-center text-brand-gold-bright mb-10 shadow-sm group-hover:bg-brand-olive-dark group-hover:text-white transition-all duration-500">
                                 <Utensils size={40} />
                             </div>
-                            <h3 className="text-3xl lg:text-4xl font-serif font-bold mb-6 text-brand-olive-dark">VVIP Bakery</h3>
+                            <h3 className="text-3xl lg:text-4xl font-serif font-bold mb-6 text-brand-olive-dark">Swiss Affaire</h3>
                             <p className="text-gray-600 mb-10 text-lg leading-relaxed font-medium">
                                 Premier B2B cloud kitchen partner. Delivering gourmet pastries to cafes, restaurants, and corporate events.
                             </p>

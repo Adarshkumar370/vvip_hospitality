@@ -13,8 +13,8 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      // Supabase storage and Unsplash for images
-      "img-src 'self' https://*.supabase.co https://images.unsplash.com data: blob:",
+      // Supabase storage, Unsplash, and Pravatar for images
+      "img-src 'self' https://*.supabase.co https://images.unsplash.com https://i.pravatar.cc data: blob:",
       // Next.js requires unsafe-eval in dev; tighten in prod if possible
       "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline'",
@@ -40,6 +40,10 @@ const nextConfig: NextConfig = {
       {
         protocol: "https",
         hostname: "images.unsplash.com",
+      },
+      {
+        protocol: "https",
+        hostname: "i.pravatar.cc",
       },
     ],
   },

@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Phone, Lock, ArrowRight, CheckCircle2, Loader2, Smartphone, User, Mail } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
-import { checkUser, registerUser, sendOtp, verifyOtp } from "@/app/bakery/actions";
+import { checkUser, registerUser, sendOtp, verifyOtp, loginUser } from "@/app/bakery/actions";
 import { useAuth } from "@/context/AuthContext";
 
 interface AuthModalProps {
@@ -88,8 +88,8 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
     };
 
     const handlePostAuthCheck = async () => {
-        const result = await checkUser(phone);
-        if (result.exists && result.user) {
+        const result = await loginUser(phone);
+        if (result.success && result.user) {
             login(result.user as any);
             onClose();
             router.push("/bakery/order");
@@ -204,7 +204,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                                             <Lock size={32} />
                                         </div>
                                         <h2 className="text-3xl font-serif font-black text-brand-olive-dark tracking-tight mb-2">Verify OTP</h2>
-                                        <p className="text-gray-500 font-medium">Enter the 6-digit code sent to<br /><span className="text-brand-olive-dark font-black">+{phone}</span></p>
+                                        <p className="text-gray-500 font-medium">Enter the 6-digit code sent to<br /><span className="text-brand-olive-dark font-black">+91 {phone}</span></p>
                                     </div>
 
                                     <div className="space-y-4">
@@ -301,7 +301,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                                         <CheckCircle2 size={64} />
                                     </div>
                                     <h2 className="text-4xl font-serif font-black text-brand-olive-dark tracking-tight mb-4">Login Successful</h2>
-                                    <p className="text-gray-500 font-bold text-lg">Welcome back to VVIP Bakery.</p>
+                                    <p className="text-gray-500 font-bold text-lg">Welcome back to Swiss Affaire.</p>
                                 </motion.div>
                             )}
                         </div>

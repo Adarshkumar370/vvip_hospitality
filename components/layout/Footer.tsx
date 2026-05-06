@@ -32,7 +32,7 @@ export default function Footer() {
                         <h4 className="text-lg font-bold font-serif">Quick Links</h4>
                         <ul className="space-y-4">
                             <li><Link href="/olive-stayz" className="text-gray-500 hover:text-brand-gold-bright transition-colors text-sm font-semibold">Olive Stayz</Link></li>
-                            <li><Link href="/bakery" className="text-gray-500 hover:text-brand-gold-bright transition-colors text-sm font-semibold">VVIP Bakery</Link></li>
+                            <li><Link href="/bakery" className="text-gray-500 hover:text-brand-gold-bright transition-colors text-sm font-semibold">Swiss Affaire</Link></li>
                             <li><Link href="/about-us" className="text-gray-500 hover:text-brand-gold-bright transition-colors text-sm font-semibold">About Us</Link></li>
                             <li><Link href="/contact" className="text-gray-500 hover:text-brand-gold-bright transition-colors text-sm font-semibold">Contact Us</Link></li>
                         </ul>
