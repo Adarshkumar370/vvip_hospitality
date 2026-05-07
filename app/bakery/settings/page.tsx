@@ -167,10 +167,10 @@ export default function SettingsPage() {
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
                     <div className="space-y-2">
                         <Link href="/bakery" className="inline-flex items-center gap-2 text-brand-gold-bright font-black uppercase tracking-widest text-[10px] hover:gap-3 transition-all mb-4">
-                            <ArrowLeft size={14} /> Back to Bakery
+                            <ArrowLeft size={14} /> Back to Swiss Affaire
                         </Link>
-                        <h1 className="text-4xl md:text-6xl font-serif font-black text-brand-olive-dark tracking-tighter">
-                            Settings
+                        <h1 className="text-4xl md:text-5xl font-serif font-black text-brand-olive-dark tracking-tighter">
+                            Swiss Affaire <span className="text-brand-gold-bright italic">- The Bake Studio</span>
                         </h1>
                     </div>
                 </div>
@@ -186,10 +186,11 @@ export default function SettingsPage() {
                                     "w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-black text-sm uppercase tracking-widest transition-all",
                                     activeTab === tab.id
                                         ? "bg-brand-olive-dark text-white shadow-xl"
-                                        : "bg-white/50 text-brand-olive-dark/40 hover:bg-white hover:text-brand-olive-dark"
+                                        : "bg-white/50 text-brand-olive-dark/70 hover:bg-white hover:text-brand-olive-dark"
                                 )}
+                                aria-pressed={activeTab === tab.id}
                             >
-                                <tab.icon size={18} />
+                                <tab.icon size={18} aria-hidden="true" />
                                 {tab.label}
                             </button>
                         ))}
@@ -197,7 +198,7 @@ export default function SettingsPage() {
                             onClick={() => { logout(); router.push("/bakery"); }}
                             className="w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-black text-sm uppercase tracking-widest text-red-500 hover:bg-red-50 transition-all mt-8"
                         >
-                            <LogOut size={18} />
+                            <LogOut size={18} aria-hidden="true" />
                             Logout
                         </button>
                     </aside>
@@ -236,8 +237,9 @@ export default function SettingsPage() {
                                     <form onSubmit={handleProfileUpdate} className="space-y-6">
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                             <div className="space-y-2">
-                                                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-4">Full Name</label>
+                                                <label htmlFor="name" className="text-[10px] font-black uppercase tracking-widest text-gray-600 ml-4">Full Name</label>
                                                 <input
+                                                    id="name"
                                                     type="text"
                                                     required
                                                     value={profileData.name}
@@ -246,8 +248,9 @@ export default function SettingsPage() {
                                                 />
                                             </div>
                                             <div className="space-y-2">
-                                                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-4">Email Address</label>
+                                                <label htmlFor="email" className="text-[10px] font-black uppercase tracking-widest text-gray-600 ml-4">Email Address</label>
                                                 <input
+                                                    id="email"
                                                     type="email"
                                                     required
                                                     value={profileData.email}
@@ -256,14 +259,14 @@ export default function SettingsPage() {
                                                 />
                                             </div>
                                             <div className="space-y-2 md:col-span-2">
-                                                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-4">Mobile Number</label>
+                                                <label className="text-[10px] font-black uppercase tracking-widest text-gray-600 ml-4">Mobile Number</label>
                                                 <input
                                                     type="text"
                                                     disabled
                                                     value={user.phone}
                                                     className="w-full bg-brand-soft-gray border-2 border-transparent rounded-2xl py-4 px-6 text-sm font-bold text-brand-olive-dark/40 cursor-not-allowed"
                                                 />
-                                                <p className="text-[9px] text-gray-400 italic ml-4">Phone number cannot be changed as it is used for login verification.</p>
+                                                <p className="text-[9px] text-gray-600 italic ml-4">Phone number cannot be changed as it is used for login verification.</p>
                                             </div>
                                         </div>
 
@@ -272,7 +275,7 @@ export default function SettingsPage() {
                                             disabled={isSaving}
                                             className="bg-brand-olive-dark text-white px-10 py-4 rounded-xl font-black text-sm uppercase tracking-widest hover:bg-brand-gold-bright transition-all shadow-lg active:scale-95 disabled:opacity-50 flex items-center gap-3"
                                         >
-                                            {isSaving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
+                                            {isSaving ? <Loader2 className="animate-spin" size={18} aria-hidden="true" /> : <Save size={18} aria-hidden="true" />}
                                             Save Changes
                                         </button>
                                     </form>
@@ -295,18 +298,19 @@ export default function SettingsPage() {
                                         <button
                                             onClick={() => { setEditingAddress(null); setAddressForm({ receiver_name: user?.name || "", receiver_phone: user?.phone || "", address_line1: "", address_line2: "", city: "Delhi", pincode: "", is_default: false }); setIsAddressModalOpen(true); }}
                                             className="bg-brand-soft-gray text-brand-olive-dark p-4 rounded-2xl hover:bg-brand-olive-dark hover:text-white transition-all shadow-sm"
+                                            aria-label="Add new address"
                                         >
-                                            <Plus size={20} />
+                                            <Plus size={20} aria-hidden="true" />
                                         </button>
                                     </div>
 
                                     {isLoadingData ? (
-                                        <div className="py-20 flex justify-center"><Loader2 className="animate-spin text-brand-gold-bright" /></div>
+                                        <div className="py-20 flex justify-center"><Loader2 className="animate-spin text-brand-gold-bright" aria-hidden="true" /></div>
                                     ) : (
                                         <div className="space-y-4">
                                             {addresses.length === 0 ? (
                                                 <div className="text-center py-12 border-2 border-dashed border-gray-100 rounded-3xl">
-                                                    <MapPin size={40} className="mx-auto text-gray-200 mb-4" />
+                                                    <MapPin size={40} className="mx-auto text-gray-200 mb-4" aria-hidden="true" />
                                                     <p className="text-gray-400 text-sm font-bold uppercase tracking-widest">No addresses added yet</p>
                                                 </div>
                                             ) : (
@@ -326,15 +330,17 @@ export default function SettingsPage() {
                                                         <div className="flex gap-2">
                                                             <button
                                                                 onClick={() => { setEditingAddress(addr); setAddressForm({ receiver_name: addr.receiver_name, receiver_phone: addr.receiver_phone, address_line1: addr.address_line1, address_line2: addr.address_line2 || "", city: addr.city, pincode: addr.pincode, is_default: addr.is_default }); setIsAddressModalOpen(true); }}
-                                                                className="p-2 text-gray-400 hover:text-brand-gold-bright transition-colors"
+                                                                className="p-2 text-gray-500 hover:text-brand-gold-bright transition-colors"
+                                                                aria-label={`Edit address for ${addr.receiver_name}`}
                                                             >
-                                                                <Edit2 size={16} />
+                                                                <Edit2 size={16} aria-hidden="true" />
                                                             </button>
                                                             <button
                                                                 onClick={() => handleDeleteAddress(addr.id)}
-                                                                className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                                                                className="p-2 text-gray-500 hover:text-red-500 transition-colors"
+                                                                aria-label={`Delete address for ${addr.receiver_name}`}
                                                             >
-                                                                <Trash2 size={16} />
+                                                                <Trash2 size={16} aria-hidden="true" />
                                                             </button>
                                                         </div>
                                                     </div>
@@ -363,7 +369,7 @@ export default function SettingsPage() {
                                             onClick={() => setOrderTab("ongoing")}
                                             className={cn(
                                                 "flex-1 py-2 rounded-lg text-[10px] md:text-sm font-black uppercase tracking-widest transition-all",
-                                                orderTab === "ongoing" ? "bg-white text-brand-olive-dark shadow-sm" : "text-gray-400 hover:text-brand-olive-dark"
+                                                orderTab === "ongoing" ? "bg-white text-brand-olive-dark shadow-sm" : "text-gray-500 hover:text-brand-olive-dark"
                                             )}
                                         >
                                             Ongoing
@@ -372,7 +378,7 @@ export default function SettingsPage() {
                                             onClick={() => setOrderTab("pending")}
                                             className={cn(
                                                 "flex-1 py-2 rounded-lg text-[8px] md:text-xs font-black uppercase tracking-widest transition-all",
-                                                orderTab === "pending" ? "bg-white text-brand-olive-dark shadow-sm" : "text-gray-400 hover:text-brand-olive-dark"
+                                                orderTab === "pending" ? "bg-white text-brand-olive-dark shadow-sm" : "text-gray-500 hover:text-brand-olive-dark"
                                             )}
                                         >
                                             Payment Pending
@@ -381,7 +387,7 @@ export default function SettingsPage() {
                                             onClick={() => setOrderTab("completed")}
                                             className={cn(
                                                 "flex-1 py-2 rounded-lg text-[10px] md:text-sm font-black uppercase tracking-widest transition-all",
-                                                orderTab === "completed" ? "bg-white text-brand-olive-dark shadow-sm" : "text-gray-400 hover:text-brand-olive-dark"
+                                                orderTab === "completed" ? "bg-white text-brand-olive-dark shadow-sm" : "text-gray-500 hover:text-brand-olive-dark"
                                             )}
                                         >
                                             Completed
@@ -389,7 +395,7 @@ export default function SettingsPage() {
                                     </div>
 
                                     {isLoadingData ? (
-                                        <div className="py-20 flex justify-center"><Loader2 className="animate-spin text-brand-gold-bright" /></div>
+                                        <div className="py-20 flex justify-center"><Loader2 className="animate-spin text-brand-gold-bright" aria-hidden="true" /></div>
                                     ) : (
                                         <div className="space-y-6">
                                             {orders.filter((order) => {
@@ -399,7 +405,7 @@ export default function SettingsPage() {
                                                 return true;
                                             }).length === 0 ? (
                                                 <div className="text-center py-12 border-2 border-dashed border-gray-100 rounded-3xl">
-                                                    <Package size={40} className="mx-auto text-gray-200 mb-4" />
+                                                    <Package size={40} className="mx-auto text-gray-200 mb-4" aria-hidden="true" />
                                                     <p className="text-gray-400 text-sm font-bold uppercase tracking-widest">No orders found</p>
                                                 </div>
                                             ) : (
@@ -421,8 +427,8 @@ export default function SettingsPage() {
                                                                     <span className={cn(
                                                                         "text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border",
                                                                         order.payment_status === 'paid'
-                                                                            ? "bg-green-50 text-green-600 border-green-200"
-                                                                            : "bg-orange-50 text-orange-600 border-orange-200"
+                                                                            ? "bg-green-100 text-green-700 border-green-200"
+                                                                            : "bg-orange-100 text-orange-700 border-orange-200"
                                                                     )}>
                                                                         {order.payment_status}
                                                                     </span>
@@ -477,11 +483,11 @@ export default function SettingsPage() {
                                                                                             : "bg-white border-gray-200 text-gray-300",
                                                                                         isActive && "scale-110"
                                                                                     )}>
-                                                                                        <step.i size={14} />
+                                                                                        <step.i size={14} aria-hidden="true" />
                                                                                     </div>
                                                                                     <span className={cn(
                                                                                         "text-[8px] font-black uppercase tracking-widest",
-                                                                                        isCompleted ? "text-brand-olive-dark" : "text-gray-300"
+                                                                                        isCompleted ? "text-brand-olive-dark" : "text-gray-400"
                                                                                     )}>{step.label}</span>
                                                                                 </div>
                                                                                 {idx < arr.length - 1 && (
@@ -526,7 +532,7 @@ export default function SettingsPage() {
                             initial={{ opacity: 0, scale: 0.95, y: 20 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                            className="relative w-full max-w-xl bg-white rounded-[3rem] p-10 md:p-12 shadow-2xl overflow-hidden"
+                            className="relative w-full max-w-xl bg-white rounded-[3rem] p-10 md:p-12 shadow-2xl overflow-y-auto max-h-[90vh] custom-scrollbar"
                         >
                             <h3 className="text-3xl font-serif font-black text-brand-olive-dark mb-2">
                                 {editingAddress ? "Edit" : "New"} <span className="text-brand-gold-bright italic">Address</span>
@@ -536,8 +542,9 @@ export default function SettingsPage() {
                             <form onSubmit={handleAddressSubmit} className="space-y-6">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-4">Receiver Name</label>
+                                        <label htmlFor="receiver_name" className="text-[10px] font-black uppercase tracking-widest text-gray-600 ml-4">Receiver Name</label>
                                         <input
+                                            id="receiver_name"
                                             type="text" required
                                             value={addressForm.receiver_name}
                                             onChange={(e) => setAddressForm(prev => ({ ...prev, receiver_name: e.target.value }))}
@@ -545,8 +552,9 @@ export default function SettingsPage() {
                                         />
                                     </div>
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-4">Contact Phone</label>
+                                        <label htmlFor="receiver_phone" className="text-[10px] font-black uppercase tracking-widest text-gray-600 ml-4">Contact Phone</label>
                                         <input
+                                            id="receiver_phone"
                                             type="text" required
                                             value={addressForm.receiver_phone}
                                             onChange={(e) => setAddressForm(prev => ({ ...prev, receiver_phone: e.target.value }))}
@@ -554,8 +562,9 @@ export default function SettingsPage() {
                                         />
                                     </div>
                                     <div className="space-y-2 md:col-span-2">
-                                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-4">Address Line 1</label>
+                                        <label htmlFor="address_line1" className="text-[10px] font-black uppercase tracking-widest text-gray-600 ml-4">Address Line 1</label>
                                         <input
+                                            id="address_line1"
                                             type="text" required
                                             value={addressForm.address_line1}
                                             onChange={(e) => setAddressForm(prev => ({ ...prev, address_line1: e.target.value }))}
@@ -563,8 +572,9 @@ export default function SettingsPage() {
                                         />
                                     </div>
                                     <div className="space-y-2 md:col-span-2">
-                                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-4">Address Line 2 (Optional)</label>
+                                        <label htmlFor="address_line2" className="text-[10px] font-black uppercase tracking-widest text-gray-600 ml-4">Address Line 2 (Optional)</label>
                                         <input
+                                            id="address_line2"
                                             type="text"
                                             value={addressForm.address_line2}
                                             onChange={(e) => setAddressForm(prev => ({ ...prev, address_line2: e.target.value }))}
@@ -572,8 +582,9 @@ export default function SettingsPage() {
                                         />
                                     </div>
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-4">City</label>
+                                        <label htmlFor="city" className="text-[10px] font-black uppercase tracking-widest text-gray-600 ml-4">City</label>
                                         <input
+                                            id="city"
                                             type="text" required
                                             value={addressForm.city}
                                             onChange={(e) => setAddressForm(prev => ({ ...prev, city: e.target.value }))}
@@ -581,8 +592,9 @@ export default function SettingsPage() {
                                         />
                                     </div>
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-4">Pincode</label>
+                                        <label htmlFor="pincode" className="text-[10px] font-black uppercase tracking-widest text-gray-600 ml-4">Pincode</label>
                                         <input
+                                            id="pincode"
                                             type="text" required
                                             value={addressForm.pincode}
                                             onChange={(e) => setAddressForm(prev => ({ ...prev, pincode: e.target.value }))}
@@ -594,6 +606,7 @@ export default function SettingsPage() {
                                 <label className="flex items-center gap-3 cursor-pointer group mt-4">
                                     <div className="relative">
                                         <input
+                                            id="is_default"
                                             type="checkbox"
                                             hidden
                                             checked={addressForm.is_default}
@@ -606,14 +619,14 @@ export default function SettingsPage() {
                                             {addressForm.is_default && <CheckCircle2 size={14} className="text-white" />}
                                         </div>
                                     </div>
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-brand-olive-dark/60">Set as primary address</span>
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-brand-olive-dark/80">Set as primary address</span>
                                 </label>
 
                                 <div className="flex gap-4 pt-4">
                                     <button
                                         type="button"
                                         onClick={() => setIsAddressModalOpen(false)}
-                                        className="flex-1 py-4 text-brand-olive-dark/40 font-black uppercase tracking-widest text-[10px] hover:text-brand-olive-dark"
+                                        className="flex-1 py-4 text-brand-olive-dark/70 font-black uppercase tracking-widest text-[10px] hover:text-brand-olive-dark"
                                     >
                                         Cancel
                                     </button>

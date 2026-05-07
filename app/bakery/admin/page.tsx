@@ -67,6 +67,7 @@ interface Product {
     image: string;
     description: string;
     unit: string;
+    max_daily_limit: number;
     created_at?: string;
 }
 
@@ -132,6 +133,13 @@ interface EditProductModalProps {
     categories: Category[];
     onClose: () => void;
     onSave: (updated: Omit<Product, "id" | "created_at">) => void;
+    isSubmitting: boolean;
+}
+
+interface AddProductModalProps {
+    categories: Category[];
+    onClose: () => void;
+    onAdd: (product: Omit<Product, "id" | "created_at">) => void;
     isSubmitting: boolean;
 }
 
@@ -580,18 +588,11 @@ function ProductsView() {
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-    const [newProduct, setNewProduct] = useState({
-        name: "",
-        category: "",
-        price: 0,
-        image: "/images/bakery/sourdough.png",
-        description: "",
-        unit: "per kg"
-    });
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
-    const [isUploading, setIsUploading] = useState(false);
     const [deletingId, setDeletingId] = useState<number | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [updatingLimitId, setUpdatingLimitId] = useState<number | null>(null);
 
     useEffect(() => {
         loadData();
@@ -603,34 +604,32 @@ function ProductsView() {
         if (prodRes.success) setProducts((prodRes.products || []) as unknown as Product[]);
         if (catRes.success) {
             setCategories((catRes.categories || []) as unknown as Category[]);
-            if (catRes.categories && catRes.categories.length > 0 && !newProduct.category) {
-                setNewProduct(prev => ({ ...prev, category: catRes.categories![0].name }));
-            }
         }
         setIsLoading(false);
     };
 
-    const handleAdd = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!newProduct.category) {
-            alert("Please create a category first!");
-            return;
-        }
+    const handleAdd = async (product: Omit<Product, "id" | "created_at">) => {
         setIsSubmitting(true);
-        const result = await addProduct(newProduct);
+        const result = await addProduct(product as any);
         if (result.success) {
-            setNewProduct({
-                name: "",
-                category: categories[0]?.name || "",
-                price: 0,
-                image: "/images/bakery/sourdough.png",
-                description: "",
-                unit: "per kg"
-            });
-            const prodRes = await getProducts();
-            if (prodRes.success) setProducts((prodRes.products || []) as unknown as Product[]);
+            setIsAddModalOpen(false);
+            loadData();
+        } else {
+            alert("Failed to add product: " + result.error);
         }
         setIsSubmitting(false);
+    };
+
+    const handleLimitUpdate = async (product: Product, newLimit: number) => {
+        setUpdatingLimitId(product.id);
+        const { id, created_at, ...updateData } = product;
+        const result = await updateProduct(id, { ...updateData, max_daily_limit: newLimit });
+        if (result.success) {
+            loadData();
+        } else {
+            alert("Failed to update limit: " + result.error);
+        }
+        setUpdatingLimitId(null);
     };
 
     const handleUpdate = async (updatedProduct: Omit<Product, "id" | "created_at">) => {
@@ -640,25 +639,10 @@ function ProductsView() {
         if (result.success) {
             setEditingProduct(null);
             loadData();
+        } else {
+            alert("Failed to update product: " + result.error);
         }
         setIsSubmitting(false);
-    };
-
-    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-
-        setIsUploading(true);
-        const formData = new FormData();
-        formData.append("file", file);
-
-        const result = await uploadImage(formData);
-        if (result.success && result.url) {
-            setNewProduct(prev => ({ ...prev, image: result.url }));
-        } else {
-            alert("Upload failed: " + result.error);
-        }
-        setIsUploading(false);
     };
 
     const handleDelete = async () => {
@@ -680,7 +664,7 @@ function ProductsView() {
             exit={{ opacity: 0, y: -20 }}
             className="space-y-12"
         >
-            <div className="flex justify-between items-end">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                 <div>
                     <div className="flex items-center gap-3 text-brand-gold-bright font-black uppercase tracking-[0.2em] text-xs mb-3">
                         <ShoppingBag size={16} />
@@ -688,181 +672,61 @@ function ProductsView() {
                     </div>
                     <h1 className="text-5xl font-serif font-black text-brand-olive-dark tracking-tighter">Bakery Products</h1>
                 </div>
+                <button
+                    onClick={() => setIsAddModalOpen(true)}
+                    className="flex items-center gap-3 px-8 py-4 bg-brand-olive-dark text-white rounded-2xl font-black hover:bg-brand-gold-bright transition-all shadow-xl active:scale-95 group"
+                >
+                    <Plus size={20} className="text-brand-gold-bright" />
+                    Add New Product
+                </button>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-                {/* Add Product Form */}
-                <div className="lg:col-span-1">
-                    <div className="bg-white rounded-[2.5rem] shadow-premium p-10 border border-white sticky top-12">
-                        <h3 className="text-2xl font-serif font-black text-brand-olive-dark mb-8">
-                            Add New Product
-                        </h3>
-                        <form onSubmit={handleAdd} className="space-y-6">
-                            <div className="space-y-4">
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-4">Product Name</label>
-                                    <input
-                                        required
-                                        type="text"
-                                        value={newProduct.name}
-                                        onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
-                                        placeholder="e.g., Artisanal Sourdough"
-                                        className="w-full bg-brand-soft-gray border-2 border-transparent focus:border-brand-gold-bright/30 focus:bg-white outline-none rounded-2xl py-4 px-6 text-sm font-bold text-brand-olive-dark transition-all"
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-4">Category</label>
-                                    <select
-                                        required
-                                        value={newProduct.category}
-                                        onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })}
-                                        className="w-full bg-brand-soft-gray border-2 border-transparent focus:border-brand-gold-bright/30 focus:bg-white outline-none rounded-2xl py-4 px-6 text-sm font-bold text-brand-olive-dark transition-all"
-                                    >
-                                        <option value="" disabled>Select Category</option>
-                                        {categories.map(cat => (
-                                            <option key={cat.id} value={cat.name}>{cat.name}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-4">Description</label>
-                                    <textarea
-                                        required
-                                        value={newProduct.description}
-                                        onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
-                                        placeholder="Short description of the product..."
-                                        rows={3}
-                                        className="w-full bg-brand-soft-gray border-2 border-transparent focus:border-brand-gold-bright/30 focus:bg-white outline-none rounded-2xl py-4 px-6 text-sm font-bold text-brand-olive-dark transition-all resize-none"
-                                    />
-                                </div>
-                                <div className="flex gap-4">
-                                    <div className="space-y-2 flex-1">
-                                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-4">Price (₹)</label>
-                                        <input
-                                            required
-                                            type="number"
-                                            value={newProduct.price || ""}
-                                            onChange={(e) => setNewProduct({ ...newProduct, price: parseInt(e.target.value) })}
-                                            placeholder="280"
-                                            className="w-full bg-brand-soft-gray border-2 border-transparent focus:border-brand-gold-bright/30 focus:bg-white outline-none rounded-2xl py-4 px-6 text-sm font-bold text-brand-olive-dark transition-all"
-                                        />
-                                    </div>
-                                    <div className="space-y-2 flex-1">
-                                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-4">Unit</label>
-                                        <input
-                                            required
-                                            type="text"
-                                            value={newProduct.unit}
-                                            onChange={(e) => setNewProduct({ ...newProduct, unit: e.target.value })}
-                                            placeholder="per kg"
-                                            className="w-full bg-brand-soft-gray border-2 border-transparent focus:border-brand-gold-bright/30 focus:bg-white outline-none rounded-2xl py-4 px-6 text-sm font-bold text-brand-olive-dark transition-all"
-                                        />
-                                    </div>
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-4">Product Image</label>
-                                    <div className="relative group p-4 bg-brand-soft-gray rounded-2xl border-2 border-dashed border-gray-200 hover:border-brand-gold-bright/30 transition-all">
-                                        {newProduct.image ? (
-                                            <div className="relative w-full aspect-video rounded-xl overflow-hidden shadow-sm mb-3">
-                                                <Image src={newProduct.image} alt="Preview" fill className="object-cover" />
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setNewProduct(prev => ({ ...prev, image: "" }))}
-                                                    className="absolute top-2 right-2 p-1.5 bg-brand-olive-dark/80 text-white rounded-lg hover:bg-brand-olive-dark transition-colors"
-                                                >
-                                                    <X size={14} />
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <div className="flex flex-col items-center justify-center py-4 text-gray-400">
-                                                <Camera size={32} strokeWidth={1} className="mb-2" />
-                                                <p className="text-[10px] font-bold uppercase tracking-widest">Upload Photo</p>
-                                            </div>
-                                        )}
-                                        <input
-                                            type="file"
-                                            accept="image/*"
-                                            onChange={handleFileUpload}
-                                            disabled={isUploading}
-                                            className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed"
-                                        />
-                                        {isUploading && (
-                                            <div className="absolute inset-0 bg-white/80 backdrop-blur-[1px] rounded-2xl flex flex-col items-center justify-center gap-2">
-                                                <Loader2 className="animate-spin text-brand-gold-bright" size={20} />
-                                                <p className="text-[10px] font-black uppercase tracking-widest text-brand-gold-bright">Uploading...</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                    <p className="text-[9px] text-gray-400 pl-4 italic">Recommended: 800x600px PNG/JPG</p>
-                                </div>
-                            </div>
-                            <button
-                                type="submit"
-                                disabled={isSubmitting}
-                                className="w-full bg-brand-olive-dark text-white py-5 rounded-2xl font-black flex items-center justify-center gap-3 hover:bg-brand-gold-bright transition-all shadow-xl active:scale-95 disabled:opacity-50"
-                            >
-                                {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : <Plus size={20} />}
-                                Add to Catalog
-                            </button>
-                        </form>
+            <div className="bg-white rounded-[2.5rem] shadow-premium p-10 border border-white">
+                <div className="flex items-center justify-between mb-8 px-6">
+                    <h3 className="text-2xl font-serif font-black text-brand-olive-dark">Existing Products ({products.length})</h3>
+                    <div className="hidden md:flex items-center text-[10px] font-black uppercase tracking-widest text-gray-400">
+                        <span className="w-[200px] text-center">Daily Max Limit</span>
+                        <span className="w-[120px] text-center">Actions</span>
                     </div>
                 </div>
 
-                {/* Product List */}
-                <div className="lg:col-span-2">
-                    <div className="bg-white rounded-[2.5rem] shadow-premium p-10 border border-white">
-                        <h3 className="text-2xl font-serif font-black text-brand-olive-dark mb-8">Existing Products ({products.length})</h3>
-
-                        {isLoading ? (
-                            <div className="py-20 flex flex-col items-center gap-4">
-                                <Loader2 className="animate-spin text-brand-gold-bright" size={40} />
-                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Loading Catalog...</p>
-                            </div>
-                        ) : products.length === 0 ? (
-                            <div className="py-20 text-center space-y-4">
-                                <div className="w-16 h-16 bg-brand-soft-gray rounded-full flex items-center justify-center text-gray-300 mx-auto">
-                                    <ShoppingBag size={32} />
-                                </div>
-                                <p className="text-gray-400 font-serif italic">Your catalog is currently empty.</p>
-                            </div>
-                        ) : (
-                            <div className="space-y-4">
-                                {products.map((product) => (
-                                    <div key={product.id} className="flex items-center justify-between p-4 bg-brand-soft-gray/50 rounded-2xl group border border-transparent hover:border-brand-gold-bright/20 transition-all">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-12 h-12 bg-white rounded-xl overflow-hidden shadow-sm relative">
-                                                <Image src={product.image} alt={product.name} fill className="object-cover" />
-                                            </div>
-                                            <div>
-                                                <p className="text-sm font-black text-brand-olive-dark">{product.name}</p>
-                                                <p className="text-[10px] font-black uppercase tracking-widest text-brand-gold-bright">{product.category} • ₹{product.price} {product.unit}</p>
-                                                {product.description && <p className="text-[10px] text-gray-500 font-medium line-clamp-1 mt-0.5">{product.description}</p>}
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            <button
-                                                onClick={() => setEditingProduct(product)}
-                                                className="px-4 py-2 bg-brand-soft-gray hover:bg-brand-olive-dark hover:text-white text-brand-olive-dark rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 flex items-center gap-2"
-                                            >
-                                                <Pencil size={14} />
-                                                Edit
-                                            </button>
-                                            <button
-                                                onClick={() => setDeletingId(product.id)}
-                                                className="px-4 py-2 bg-red-50 hover:bg-red-500 hover:text-white text-red-500 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 flex items-center gap-2"
-                                            >
-                                                <Trash2 size={14} />
-                                                Delete
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
+                {isLoading ? (
+                    <div className="py-20 flex flex-col items-center gap-4">
+                        <Loader2 className="animate-spin text-brand-gold-bright" size={40} />
+                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Loading Catalog...</p>
                     </div>
-                </div>
+                ) : products.length === 0 ? (
+                    <div className="py-20 text-center space-y-4">
+                        <div className="w-16 h-16 bg-brand-soft-gray rounded-full flex items-center justify-center text-gray-300 mx-auto">
+                            <ShoppingBag size={32} />
+                        </div>
+                        <p className="text-gray-400 font-serif italic">Your catalog is currently empty.</p>
+                    </div>
+                ) : (
+                    <div className="space-y-4">
+                        {products.map((product) => (
+                            <ProductRow 
+                                key={product.id} 
+                                product={product} 
+                                onEdit={() => setEditingProduct(product)}
+                                onDelete={() => setDeletingId(product.id)}
+                                onLimitUpdate={(limit) => handleLimitUpdate(product, limit)}
+                                isUpdating={updatingLimitId === product.id}
+                            />
+                        ))}
+                    </div>
+                )}
             </div>
+
             <AnimatePresence>
+                {isAddModalOpen && (
+                    <AddProductModal 
+                        categories={categories}
+                        onClose={() => setIsAddModalOpen(false)}
+                        onAdd={handleAdd}
+                        isSubmitting={isSubmitting}
+                    />
+                )}
                 {editingProduct && (
                     <EditProductModal
                         product={editingProduct}
@@ -1357,7 +1221,8 @@ function EditProductModal({ product, categories, onClose, onSave, isSubmitting }
         price: product.price,
         image: product.image,
         description: product.description || "",
-        unit: product.unit || "per kg"
+        unit: product.unit || "per kg",
+        max_daily_limit: product.max_daily_limit || 0
     });
     const [isUploading, setIsUploading] = useState(false);
 
@@ -1449,8 +1314,19 @@ function EditProductModal({ product, categories, onClose, onSave, isSubmitting }
                                 <input
                                     required
                                     type="number"
-                                    value={data.price}
-                                    onChange={(e) => setData({ ...data, price: parseInt(e.target.value) })}
+                                    value={isNaN(data.price) ? "" : data.price}
+                                    onChange={(e) => setData({ ...data, price: parseInt(e.target.value) || 0 })}
+                                    className="w-full bg-brand-soft-gray border-2 border-transparent focus:border-brand-gold-bright/30 focus:bg-white outline-none rounded-2xl py-4 px-6 text-sm font-bold text-brand-olive-dark transition-all"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-4">Daily Max Limit</label>
+                                <input
+                                    required
+                                    type="number"
+                                    value={isNaN(data.max_daily_limit) ? "" : data.max_daily_limit}
+                                    onChange={(e) => setData({ ...data, max_daily_limit: parseInt(e.target.value) || 0 })}
+                                    placeholder="0 = No limit"
                                     className="w-full bg-brand-soft-gray border-2 border-transparent focus:border-brand-gold-bright/30 focus:bg-white outline-none rounded-2xl py-4 px-6 text-sm font-bold text-brand-olive-dark transition-all"
                                 />
                             </div>
@@ -1516,6 +1392,262 @@ function EditProductModal({ product, categories, onClose, onSave, isSubmitting }
         </div>
     );
 }
+
+function AddProductModal({ categories, onClose, onAdd, isSubmitting }: AddProductModalProps) {
+    const [data, setData] = useState({
+        name: "",
+        category: categories[0]?.name || "",
+        price: 0,
+        image: "/images/bakery/sourdough.png",
+        description: "",
+        unit: "per kg",
+        max_daily_limit: 100
+    });
+    const [isUploading, setIsUploading] = useState(false);
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        onAdd(data);
+    };
+
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setIsUploading(true);
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const result = await uploadImage(formData);
+        if (result.success && result.url) {
+            setData(prev => ({ ...prev, image: result.url }));
+        } else {
+            alert("Upload failed: " + result.error);
+        }
+        setIsUploading(false);
+    };
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={onClose}
+                className="absolute inset-0 bg-brand-olive-dark/60 backdrop-blur-sm"
+            />
+            <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                className="relative w-full max-w-2xl bg-white rounded-[3rem] shadow-2xl overflow-hidden border border-white/20"
+            >
+                <div className="p-10">
+                    <div className="flex items-center justify-between mb-8">
+                        <div>
+                            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-brand-gold-bright mb-1">New Arrival</p>
+                            <h3 className="text-3xl font-serif font-black text-brand-olive-dark">Add Product</h3>
+                        </div>
+                        <button onClick={onClose} className="p-3 bg-brand-soft-gray rounded-2xl text-gray-400 hover:text-brand-olive-dark transition-colors">
+                            <X size={24} />
+                        </button>
+                    </div>
+
+                    <form onSubmit={handleSubmit} className="space-y-6">
+                        <div className="grid grid-cols-2 gap-6">
+                            <div className="space-y-2 col-span-2">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-4">Product Name</label>
+                                <input
+                                    required
+                                    type="text"
+                                    value={data.name}
+                                    onChange={(e) => setData({ ...data, name: e.target.value })}
+                                    placeholder="e.g., Artisanal Sourdough"
+                                    className="w-full bg-brand-soft-gray border-2 border-transparent focus:border-brand-gold-bright/30 focus:bg-white outline-none rounded-2xl py-4 px-6 text-sm font-bold text-brand-olive-dark transition-all"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-4">Category</label>
+                                <select
+                                    required
+                                    value={data.category}
+                                    onChange={(e) => setData({ ...data, category: e.target.value })}
+                                    className="w-full bg-brand-soft-gray border-2 border-transparent focus:border-brand-gold-bright/30 focus:bg-white outline-none rounded-2xl py-4 px-6 text-sm font-bold text-brand-olive-dark transition-all"
+                                >
+                                    {categories.map((cat: any) => (
+                                        <option key={cat.id} value={cat.name}>{cat.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-4">Unit</label>
+                                <input
+                                    required
+                                    type="text"
+                                    value={data.unit}
+                                    onChange={(e) => setData({ ...data, unit: e.target.value })}
+                                    placeholder="per kg"
+                                    className="w-full bg-brand-soft-gray border-2 border-transparent focus:border-brand-gold-bright/30 focus:bg-white outline-none rounded-2xl py-4 px-6 text-sm font-bold text-brand-olive-dark transition-all"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-4">Price (₹)</label>
+                                <input
+                                    required
+                                    type="number"
+                                    value={isNaN(data.price) ? "" : data.price}
+                                    onChange={(e) => setData({ ...data, price: parseInt(e.target.value) || 0 })}
+                                    placeholder="280"
+                                    className="w-full bg-brand-soft-gray border-2 border-transparent focus:border-brand-gold-bright/30 focus:bg-white outline-none rounded-2xl py-4 px-6 text-sm font-bold text-brand-olive-dark transition-all"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-4">Daily Max Limit</label>
+                                <input
+                                    required
+                                    type="number"
+                                    value={isNaN(data.max_daily_limit) ? "" : data.max_daily_limit}
+                                    onChange={(e) => setData({ ...data, max_daily_limit: parseInt(e.target.value) || 0 })}
+                                    placeholder="0 = No limit"
+                                    className="w-full bg-brand-soft-gray border-2 border-transparent focus:border-brand-gold-bright/30 focus:bg-white outline-none rounded-2xl py-4 px-6 text-sm font-bold text-brand-olive-dark transition-all"
+                                />
+                            </div>
+                            <div className="space-y-2 col-span-2">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-4">Product Image</label>
+                                <div className="relative group p-6 bg-brand-soft-gray rounded-[2rem] border-2 border-dashed border-gray-200 hover:border-brand-gold-bright/30 transition-all text-center">
+                                    <div className="relative w-full max-w-sm mx-auto aspect-video rounded-xl overflow-hidden shadow-lg mb-4 bg-white">
+                                        <Image src={data.image} alt="Preview" fill className="object-cover" />
+                                        <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-all flex items-center justify-center">
+                                            <div className="bg-white/90 backdrop-blur-sm p-4 rounded-full text-brand-olive-dark transform scale-0 group-hover:scale-100 transition-all duration-300">
+                                                <Camera size={24} />
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Click to upload product photo</p>
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={handleFileUpload}
+                                        disabled={isUploading}
+                                        className="absolute inset-0 opacity-0 cursor-pointer"
+                                    />
+                                    {isUploading && (
+                                        <div className="absolute inset-0 bg-white/90 backdrop-blur-sm rounded-[2rem] flex flex-col items-center justify-center gap-4">
+                                            <Loader2 className="animate-spin text-brand-gold-bright" size={32} />
+                                            <p className="text-xs font-black uppercase tracking-widest text-brand-gold-bright">Uploading to Cloud...</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="space-y-2 col-span-2">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-4">Description</label>
+                                <textarea
+                                    required
+                                    rows={3}
+                                    value={data.description}
+                                    onChange={(e) => setData({ ...data, description: e.target.value })}
+                                    className="w-full bg-brand-soft-gray border-2 border-transparent focus:border-brand-gold-bright/30 focus:bg-white outline-none rounded-2xl py-4 px-6 text-sm font-bold text-brand-olive-dark transition-all resize-none"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex gap-4 pt-4">
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                className="flex-1 py-5 rounded-2xl font-black text-gray-400 hover:bg-brand-soft-gray transition-all active:scale-95"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={isSubmitting}
+                                className="flex-[2] bg-brand-olive-dark text-white py-5 rounded-2xl font-black flex items-center justify-center gap-3 hover:bg-brand-gold-bright transition-all shadow-xl active:scale-95 disabled:opacity-50"
+                            >
+                                {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : <Plus size={20} />}
+                                Add Product
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </motion.div>
+        </div>
+    );
+}
+
+function ProductRow({ product, onEdit, onDelete, onLimitUpdate, isUpdating }: { 
+    product: Product; 
+    onEdit: () => void; 
+    onDelete: () => void; 
+    onLimitUpdate: (limit: number) => void;
+    isUpdating: boolean;
+}) {
+    const [localLimit, setLocalLimit] = useState(product.max_daily_limit);
+    const hasChanged = localLimit !== product.max_daily_limit;
+
+    useEffect(() => {
+        setLocalLimit(product.max_daily_limit);
+    }, [product.max_daily_limit]);
+
+    return (
+        <div className="flex flex-col md:flex-row items-center justify-between p-6 bg-brand-soft-gray/50 rounded-2xl group border border-transparent hover:border-brand-gold-bright/20 transition-all gap-6">
+            <div className="flex items-center gap-6 flex-1 w-full">
+                <div className="w-16 h-16 bg-white rounded-2xl overflow-hidden shadow-sm relative shrink-0">
+                    <Image src={product.image} alt={product.name} fill className="object-cover" />
+                </div>
+                <div className="flex-1">
+                    <p className="text-lg font-black text-brand-olive-dark">{product.name}</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-brand-gold-bright">{product.category} • ₹{product.price} {product.unit}</p>
+                    {product.description && <p className="text-xs text-gray-400 font-medium line-clamp-1 mt-1">{product.description}</p>}
+                </div>
+            </div>
+
+            <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
+                {/* Inline Limit Edit */}
+                <div className="w-[200px] flex justify-center">
+                    <div className="flex items-center gap-3 bg-white p-2 pr-3 rounded-xl shadow-sm border border-brand-olive-dark/5">
+                        <input 
+                            type="number"
+                            value={isNaN(localLimit) ? "" : localLimit}
+                            onChange={(e) => setLocalLimit(parseInt(e.target.value) || 0)}
+                            className="w-20 bg-transparent outline-none px-3 py-1.5 text-sm font-black text-brand-olive-dark text-center"
+                        />
+                        <button
+                            onClick={() => onLimitUpdate(localLimit)}
+                            disabled={!hasChanged || isUpdating}
+                            className={cn(
+                                "p-2 rounded-lg transition-all",
+                                hasChanged 
+                                    ? "bg-brand-gold-bright text-brand-olive-dark hover:scale-110 shadow-md" 
+                                    : "text-gray-300 pointer-events-none"
+                            )}
+                        >
+                            {isUpdating ? <Loader2 className="animate-spin" size={14} /> : <CheckCircle2 size={14} />}
+                        </button>
+                    </div>
+                </div>
+
+                <div className="w-[120px] flex justify-center gap-2">
+                    <button
+                        onClick={onEdit}
+                        className="p-2.5 bg-white hover:bg-brand-olive-dark hover:text-white text-brand-olive-dark rounded-xl transition-all active:scale-95 shadow-sm"
+                        title="Edit Product"
+                    >
+                        <Pencil size={16} />
+                    </button>
+                    <button
+                        onClick={onDelete}
+                        className="p-2.5 bg-white hover:bg-red-500 hover:text-white text-red-500 rounded-xl transition-all active:scale-95 shadow-sm"
+                        title="Delete Product"
+                    >
+                        <Trash2 size={16} />
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 
 function EditCategoryModal({ category, onClose, onSave, isSubmitting }: EditCategoryModalProps) {
     const [name, setName] = useState(category.name);

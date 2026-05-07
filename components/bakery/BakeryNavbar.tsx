@@ -38,8 +38,8 @@ export default function BakeryNavbar() {
     const navLinks = [
         { name: "Home", href: "/bakery" },
         { name: "Order", href: "/bakery/order" },
-        { name: "About", href: "/bakery#about" },
-        { name: "Contact", href: "/bakery#contact" },
+        { name: "About", href: "/about-us" },
+        { name: "Contact", href: "/contact" },
     ];
 
     return (
@@ -63,15 +63,17 @@ export default function BakeryNavbar() {
                         <div className="relative w-12 h-12 overflow-hidden rounded-full shadow-2xl group-hover:rotate-[360deg] transition-transform duration-1000 border-2 border-white/20">
                             <Image
                                 src="/images/bakery_logo.jpeg"
-                                alt="Swiss Affaire Logo"
+                                alt="Swiss Affaire - The Bake Studio Logo"
                                 fill
                                 className="object-cover"
                             />
                         </div>
                         <span className={cn(
-                            "font-serif font-black text-2xl tracking-tighter transition-colors duration-500",
+                            "font-serif font-black text-lg md:text-2xl tracking-tighter transition-colors duration-500 line-clamp-1",
                             showSolidNav ? "text-brand-olive-dark" : "text-white"
-                        )}>Swiss Affaire</span>
+                        )}>
+                            Swiss Affaire
+                        </span>
                     </Link>
 
                     {/* Desktop Nav */}
@@ -82,8 +84,8 @@ export default function BakeryNavbar() {
                                 href={link.href}
                                 className={cn(
                                     "text-[10px] font-black uppercase tracking-[0.3em] transition-all relative group",
-                                    showSolidNav 
-                                        ? (pathname === link.href ? "text-brand-gold-bright" : "text-brand-olive-dark/60 hover:text-brand-olive-dark") 
+                                    showSolidNav
+                                        ? (pathname === link.href ? "text-brand-gold-bright" : "text-brand-olive-dark/60 hover:text-brand-olive-dark")
                                         : (pathname === link.href ? "text-brand-gold-bright" : "text-white/70 hover:text-white")
                                 )}
                             >
@@ -100,12 +102,13 @@ export default function BakeryNavbar() {
                     <div className="flex items-center gap-4">
                         <button
                             onClick={() => setIsCartOpen(true)}
+                            aria-label={`View shopping cart, ${totalItems} items`}
                             className={cn(
                                 "p-3 transition-colors relative",
-                                showSolidNav ? "text-brand-olive-dark/60 hover:text-brand-gold-bright" : "text-white/60 hover:text-white"
+                                showSolidNav ? "text-brand-olive-dark/70 hover:text-brand-gold-bright" : "text-white/70 hover:text-white"
                             )}
                         >
-                            <ShoppingCart size={22} strokeWidth={2.5} />
+                            <ShoppingCart size={22} strokeWidth={2.5} aria-hidden="true" />
                             {totalItems > 0 && (
                                 <span className="absolute top-2 right-2 w-5 h-5 bg-brand-gold-bright rounded-full border-2 border-white text-[9px] flex items-center justify-center text-white font-black shadow-lg">
                                     {totalItems}
@@ -134,8 +137,8 @@ export default function BakeryNavbar() {
                                     <div className={cn(
                                         "w-11 h-11 rounded-full flex items-center justify-center transition-all shadow-premium",
                                         showSolidNav ? "bg-brand-soft-gray text-brand-olive-dark" : "bg-white/10 text-white border border-white/20"
-                                    )}>
-                                        <UserIcon size={20} />
+                                    )} aria-label="User profile">
+                                        <UserIcon size={20} aria-hidden="true" />
                                     </div>
                                 </button>
 
@@ -157,14 +160,14 @@ export default function BakeryNavbar() {
                                                     onClick={() => setIsUserDropdownOpen(false)}
                                                     className="flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-brand-soft-gray text-brand-olive-dark transition-all text-xs font-black uppercase tracking-widest"
                                                 >
-                                                    <Settings size={18} />
+                                                    <Settings size={18} aria-hidden="true" />
                                                     Settings
                                                 </Link>
                                                 <button
                                                     onClick={handleLogout}
                                                     className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-red-50 text-red-500 transition-all text-xs font-black uppercase tracking-widest"
                                                 >
-                                                    <LogOutIcon size={18} />
+                                                    <LogOutIcon size={18} aria-hidden="true" />
                                                     Logout
                                                 </button>
                                             </motion.div>
@@ -177,12 +180,13 @@ export default function BakeryNavbar() {
                                 onClick={() => setIsAuthModalOpen(true)}
                                 className={cn(
                                     "flex items-center gap-3 px-8 py-3 rounded-full font-black text-[10px] uppercase tracking-[0.2em] transition-all shadow-xl active:scale-95 group",
-                                    showSolidNav 
-                                        ? "bg-brand-olive-dark text-white hover:bg-brand-gold-bright" 
+                                    showSolidNav
+                                        ? "bg-brand-olive-dark text-white hover:bg-brand-gold-bright"
                                         : "bg-white text-brand-olive-dark hover:bg-brand-gold-bright hover:text-white"
                                 )}
+                                aria-label="Partner Login"
                             >
-                                <LogIn size={16} className="group-hover:translate-x-1 transition-transform" />
+                                <LogIn size={16} className="group-hover:translate-x-1 transition-transform" aria-hidden="true" />
                                 <span className="hidden sm:inline">Partner Login</span>
                             </button>
                         )}
@@ -194,8 +198,9 @@ export default function BakeryNavbar() {
                                 showSolidNav ? "text-brand-olive-dark" : "text-white"
                             )}
                             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                            aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
                         >
-                            {isMobileMenuOpen ? <X size={28} /> : <Menu size={28} />}
+                            {isMobileMenuOpen ? <X size={28} aria-hidden="true" /> : <Menu size={28} aria-hidden="true" />}
                         </button>
                     </div>
                 </div>

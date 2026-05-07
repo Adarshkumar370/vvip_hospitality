@@ -23,84 +23,69 @@ export default function Contact() {
                     >
                         Get in <span className="text-brand-gold-bright">Touch</span>
                     </motion.h1>
-                    <p className="text-gray-500 max-w-2xl mx-auto">
-                        Whether you&apos;re looking for a premium stay in Kaushambi, Ghaziabad or a B2B bakery partner, we&apos;re here to help.
+                    <p className="text-gray-500 max-w-2xl mx-auto font-medium">
+                        Whether you&apos;re looking for a premium stay in Kaushambi or a professional bakery partner, <span className="text-brand-olive-dark font-black">VVIP Hospitality</span> is here to help.
                     </p>
                 </div>
             </section>
 
             {/* Contact Content */}
-            <section className="py-24 px-6 max-w-4xl mx-auto w-full">
-                <div className="space-y-16">
+            <section className="py-24 px-6 max-w-7xl mx-auto w-full">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
                     {/* Info Section */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+                    <div className="w-full">
                         <div className="space-y-12">
                             <div>
-                                <h2 className="text-2xl font-serif font-bold mb-8">Contact Information</h2>
+                                <h2 className="text-2xl md:text-3xl font-serif font-black text-brand-olive-dark mb-8">Contact Information</h2>
                                 <div className="space-y-6">
-                                    <div className="flex items-start gap-5">
+                                    <div className="flex items-start gap-5 bg-brand-soft-gray p-6 rounded-3xl border border-gray-100 hover:shadow-md transition-shadow">
                                         <div className="w-12 h-12 rounded-xl bg-brand-gold-bright/10 flex items-center justify-center text-brand-gold-bright shrink-0">
                                             <MapPin size={24} />
                                         </div>
                                         <div>
-                                            <h4 className="font-bold text-sm uppercase tracking-wider text-gray-400 mb-1">Headquarters</h4>
-                                            <p className="text-gray-800 font-medium">{SITE_CONFIG.hq}</p>
+                                            <h4 className="font-bold text-xs uppercase tracking-[0.2em] text-gray-400 mb-1">Headquarters</h4>
+                                            <p className="text-gray-800 font-bold leading-relaxed">{SITE_CONFIG.hq}</p>
                                         </div>
                                     </div>
-                                    <div className="flex items-start gap-5">
+                                    <div className="flex items-start gap-5 bg-brand-soft-gray p-6 rounded-3xl border border-gray-100 hover:shadow-md transition-shadow">
                                         <div className="w-12 h-12 rounded-xl bg-brand-gold-bright/10 flex items-center justify-center text-brand-gold-bright shrink-0">
                                             <Phone size={24} />
                                         </div>
                                         <div>
-                                            <h4 className="font-bold text-sm uppercase tracking-wider text-gray-400 mb-1">WhatsApp & Call</h4>
-                                            <p className="text-gray-800 font-medium">{SITE_CONFIG.whatsapp}</p>
+                                            <h4 className="font-bold text-xs uppercase tracking-[0.2em] text-gray-400 mb-1">WhatsApp & Call</h4>
+                                            <p className="text-gray-800 font-black text-lg">{SITE_CONFIG.whatsapp}</p>
                                         </div>
                                     </div>
-                                    <div className="flex items-start gap-5">
+                                    <div className="flex items-start gap-5 bg-brand-soft-gray p-6 rounded-3xl border border-gray-100 hover:shadow-md transition-shadow">
                                         <div className="w-12 h-12 rounded-xl bg-brand-gold-bright/10 flex items-center justify-center text-brand-gold-bright shrink-0">
                                             <Clock size={24} />
                                         </div>
                                         <div>
-                                            <h4 className="font-bold text-sm uppercase tracking-wider text-gray-400 mb-1">Operational Hours</h4>
-                                            <p className="text-gray-800 font-medium">{SITE_CONFIG.operations}</p>
+                                            <h4 className="font-bold text-xs uppercase tracking-[0.2em] text-gray-400 mb-1">Operational Hours</h4>
+                                            <p className="text-gray-800 font-bold">{SITE_CONFIG.operations}</p>
                                         </div>
                                     </div>
                                 </div>
                             </div>
 
-                            <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" className="inline-flex py-5 px-10 bg-[#25D366] text-white font-bold rounded-xl hover:bg-[#128C7E] transition-colors items-center justify-center gap-2 shadow-lg active:scale-95">
-                                <MessageCircle size={20} />
-                                WhatsApp Our Team
+                            <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" className="flex py-6 px-10 bg-[#25D366] text-white font-black rounded-2xl hover:bg-[#128C7E] transition-all items-center justify-center gap-4 shadow-xl active:scale-95 uppercase tracking-widest text-sm group">
+                                <MessageCircle size={28} className="group-hover:rotate-12 transition-transform" />
+                                Chat with our team
                             </a>
-                        </div>
-
-                        <div className="p-10 bg-brand-soft-gray border border-gray-100 text-brand-olive-dark rounded-[2.5rem] relative overflow-hidden group">
-                            <div className="relative z-10">
-                                <h3 className="text-2xl font-serif font-black mb-4">GST Invoice Support</h3>
-                                <p className="text-gray-600 text-sm mb-8 leading-relaxed font-bold">
-                                    Corporate partners can request GST-compliant invoices for all bookings and bakery supplies.
-                                </p>
-                                <div className="flex items-center gap-3 text-brand-gold-bright font-black text-sm">
-                                    <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm">
-                                        <FileCheck size={20} />
-                                    </div>
-                                    Corporate Invoicing Available
-                                </div>
-                            </div>
-                            <div className="absolute bottom-0 right-0 w-32 h-32 bg-brand-gold-bright/10 rounded-full translate-y-1/2 translate-x-1/2 blur-2xl group-hover:bg-brand-gold-bright/20 transition-colors" />
                         </div>
                     </div>
 
                     {/* Interactive Google Map */}
-                    <div className="h-96 md:h-[500px] bg-gray-100 rounded-[3rem] overflow-hidden relative shadow-premium border border-gray-100">
+                    <div className="h-[400px] lg:h-[600px] bg-gray-100 rounded-[3rem] overflow-hidden relative shadow-premium border border-gray-100 group">
                         <iframe
                             width="100%"
                             height="100%"
                             style={{ border: 0 }}
+                            allowFullScreen
                             loading="lazy"
-                            src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3501.7425219403713!2d77.3274918!3d28.637477999999998!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x390cfb004a2d89e3%3A0x874083354fa96356!2sOlive%20Stayz!5e0!3m2!1sen!2sin!4v1770068189552!5m2!1sen!2sin"
-                            title="Olive Stayz Location"
-                            className="absolute inset-0 grayscale contrast-125 opacity-80 hover:grayscale-0 hover:opacity-100 transition-all duration-700"
+                            src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3501.742522752618!2d77.32491687681485!3d28.637477975662236!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x390cfb004a2d89e3%3A0x874083354fa96356!2sOlive%20Stayz!5e0!3m2!1sen!2sin!4v1778115510577!5m2!1sen!2sin"
+                            title="VVIP Hospitality Location"
+                            className="absolute inset-0 opacity-90 group-hover:opacity-100 transition-all duration-700"
                         ></iframe>
                     </div>
                 </div>

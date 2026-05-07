@@ -1,5 +1,5 @@
 export const VVIP_BAKERY = {
-    name: "Swiss Affaire",
+    name: "Swiss Affaire - The Bake Studio",
     headline: "Your Premier B2B Cloud Kitchen Partner",
     services: [
         {

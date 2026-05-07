@@ -49,7 +49,7 @@ export default function Home() {
                 href="/bakery"
                 className="group flex items-center gap-3 bg-white text-brand-olive-dark border border-gray-100 px-10 py-5 rounded-full font-black text-sm uppercase tracking-widest hover:border-brand-gold-bright hover:text-brand-gold-bright transition-all shadow-sm active:scale-95 w-full sm:w-auto justify-center"
               >
-                Swiss Affaire B2B
+                Swiss Affaire - The Bake Studio B2B
               </Link>
             </div>
           </motion.div>

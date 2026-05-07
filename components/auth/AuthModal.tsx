@@ -301,7 +301,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                                         <CheckCircle2 size={64} />
                                     </div>
                                     <h2 className="text-4xl font-serif font-black text-brand-olive-dark tracking-tight mb-4">Login Successful</h2>
-                                    <p className="text-gray-500 font-bold text-lg">Welcome back to Swiss Affaire.</p>
+                                    <p className="text-gray-500 font-bold text-lg">Welcome back to Swiss Affaire - The Bake Studio.</p>
                                 </motion.div>
                             )}
                         </div>

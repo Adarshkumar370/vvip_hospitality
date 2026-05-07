@@ -16,11 +16,12 @@ const securityHeaders = [
       // Supabase storage, Unsplash, and Pravatar for images
       "img-src 'self' https://*.supabase.co https://images.unsplash.com https://i.pravatar.cc data: blob:",
       // Next.js requires unsafe-eval in dev; tighten in prod if possible
-      "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+      "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://checkout.razorpay.com https://www.google.com",
       "style-src 'self' 'unsafe-inline'",
-      // Allow 2Factor.in only from the server (client never calls it directly after fix)
-      "connect-src 'self'",
+      // Allow API calls to Supabase, 2Factor, and Razorpay
+      "connect-src 'self' https://*.supabase.co https://api.razorpay.com",
       "font-src 'self'",
+      "frame-src 'self' https://www.google.com https://api.razorpay.com",
       "frame-ancestors 'none'",
     ].join("; "),
   },

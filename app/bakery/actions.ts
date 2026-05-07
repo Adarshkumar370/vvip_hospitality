@@ -21,10 +21,11 @@ const phoneSchema = z.string().regex(/^\d{10}$/, "Must be a 10-digit mobile numb
 const productSchema = z.object({
     name: z.string().min(1).max(100).trim(),
     category: z.string().min(1).max(100).trim(),
-    price: z.number().positive(),
+    price: z.coerce.number().positive(),
     image: z.string().min(1),
     description: z.string().max(1000).trim(),
     unit: z.string().min(1).max(30).trim(),
+    max_daily_limit: z.coerce.number().nonnegative().default(100),
 });
 
 const ORDER_STATUSES = ["pending", "preparing", "prepared", "in transit", "delivered", "cancelled"] as const;
@@ -339,17 +340,17 @@ export async function getProductsForUser(userId: number) {
     return fetcher(userId);
 }
 
-export async function addProduct(product: { name: string, category: string, price: number, image: string, description: string, unit: string }) {
+export async function addProduct(product: { name: string, category: string, price: number, image: string, description: string, unit: string, max_daily_limit: number }) {
     const parsed = productSchema.safeParse(product);
     if (!parsed.success) {
         return { success: false as const, error: parsed.error.issues[0].message };
     }
     try {
         const newProduct = await sql`
-            INSERT INTO products (name, category, price, image, description, unit)
+            INSERT INTO products (name, category, price, image, description, unit, max_daily_limit)
             VALUES (
                 ${parsed.data.name}, ${parsed.data.category}, ${parsed.data.price},
-                ${parsed.data.image}, ${parsed.data.description}, ${parsed.data.unit}
+                ${parsed.data.image}, ${parsed.data.description}, ${parsed.data.unit}, ${parsed.data.max_daily_limit}
             )
             RETURNING *
         `;
@@ -438,9 +439,10 @@ export async function updateCategory(id: number, name: string) {
     }
 }
 
-export async function updateProduct(id: number, product: { name: string, category: string, price: number, image: string, description: string, unit: string }) {
+export async function updateProduct(id: number, product: { name: string, category: string, price: number, image: string, description: string, unit: string, max_daily_limit: number }) {
     const parsed = productSchema.safeParse(product);
     if (!parsed.success) {
+        console.error("Product validation failed:", parsed.error.format());
         return { success: false as const, error: parsed.error.issues[0].message };
     }
     try {
@@ -451,7 +453,8 @@ export async function updateProduct(id: number, product: { name: string, categor
                 price       = ${parsed.data.price},
                 image       = ${parsed.data.image},
                 description = ${parsed.data.description},
-                unit        = ${parsed.data.unit}
+                unit        = ${parsed.data.unit},
+                max_daily_limit = ${parsed.data.max_daily_limit}
             WHERE id = ${id}
             RETURNING *
         `;
@@ -1000,6 +1003,28 @@ export async function placeOrder(userId: number, items: { id: number, quantity: 
             if (!product) {
                 return { success: false, error: `Product ID ${item.id} not found` };
             }
+
+            // ── STOCK / DAILY LIMIT VALIDATION ─────────────────────────────────────
+            if (product.max_daily_limit > 0) {
+                const dailyTotalRes = await sql`
+                    SELECT COALESCE(SUM(oi.quantity), 0) as total
+                    FROM order_items oi
+                    JOIN orders o ON oi.order_id = o.id
+                    WHERE oi.product_id = ${product.id}
+                      AND o.created_at >= CURRENT_DATE
+                      AND o.status != 'cancelled'
+                `;
+                const currentDailyTotal = parseFloat(dailyTotalRes[0].total);
+                if (currentDailyTotal + item.quantity > product.max_daily_limit) {
+                    const remaining = Math.max(0, product.max_daily_limit - currentDailyTotal);
+                    return { 
+                        success: false, 
+                        error: `Limit exceeded for ${product.name}. Only ${remaining} ${product.unit} remaining for today.` 
+                    };
+                }
+            }
+            // ────────────────────────────────────────────────────────────────────────
+
             const itemTotal = product.price * item.quantity;
             calculatedTotal += itemTotal;
             finalItems.push({

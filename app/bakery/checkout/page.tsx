@@ -105,7 +105,7 @@ export default function CheckoutPage() {
                 key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID, // Ensure this is set in your env
                 amount: razorpayRes.amount,
                 currency: "INR",
-                name: "Swiss Affaire",
+                name: "Swiss Affaire - The Bake Studio",
                 description: "User Order",
                 order_id: razorpayRes.orderId,
                 handler: async (response: any) => {
@@ -170,7 +170,7 @@ export default function CheckoutPage() {
                     onClick={() => router.push("/bakery/order")}
                     className="bg-brand-olive-dark text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-brand-gold-bright transition-all shadow-xl"
                 >
-                    Back to Bakery
+                    Back to Swiss Affaire
                 </button>
             </div>
         );
@@ -184,7 +184,7 @@ export default function CheckoutPage() {
                     className="flex items-center gap-2 text-brand-olive-dark/60 hover:text-brand-olive-dark transition-colors mb-8 group"
                 >
                     <ChevronLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
-                    <span className="text-sm font-black uppercase tracking-widest italic">Return to Basket</span>
+                    <span className="text-sm font-black uppercase tracking-widest italic">Return to Swiss Affaire Basket</span>
                 </button>
 
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">

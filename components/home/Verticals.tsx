@@ -56,7 +56,7 @@ export function Verticals() {
                             <div className="w-20 h-20 rounded-3xl bg-white flex items-center justify-center text-brand-gold-bright mb-10 shadow-sm group-hover:bg-brand-olive-dark group-hover:text-white transition-all duration-500">
                                 <Utensils size={40} />
                             </div>
-                            <h3 className="text-3xl lg:text-4xl font-serif font-bold mb-6 text-brand-olive-dark">Swiss Affaire</h3>
+                            <h3 className="text-3xl lg:text-4xl font-serif font-bold mb-6 text-brand-olive-dark">Swiss Affaire - The Bake Studio</h3>
                             <p className="text-gray-600 mb-10 text-lg leading-relaxed font-medium">
                                 Premier B2B cloud kitchen partner. Delivering gourmet pastries to cafes, restaurants, and corporate events.
                             </p>

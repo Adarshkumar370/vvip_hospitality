@@ -59,10 +59,10 @@ export default function OrderClient({ initialProducts, initialCategories, user: 
                             className="inline-flex items-center gap-2 text-brand-gold-bright font-black uppercase tracking-widest text-xs hover:gap-3 transition-all"
                         >
                             <ArrowLeft size={16} />
-                            Return Hub
+                            Swiss Affaire
                         </Link>
                         <h1 className="text-5xl md:text-7xl font-serif font-black text-brand-olive-dark tracking-tighter leading-none">
-                            User <span className="text-brand-gold-bright italic">Catalog</span>
+                            Swiss Affaire <span className="text-brand-gold-bright italic">- The Bake Studio</span>
                         </h1>
                         <p className="text-gray-500 font-medium text-lg max-w-xl">
                             Fresh artisanal supplies for <span className="text-brand-olive-dark font-black">{serverUser.name}</span>. Daily cloud-kitchen distribution active.
@@ -71,17 +71,18 @@ export default function OrderClient({ initialProducts, initialCategories, user: 
                 </div>
 
                 <div className="flex flex-col md:flex-row gap-8 items-start justify-between">
-                    <div className="flex flex-wrap items-center gap-3 bg-white/50 p-3 rounded-[2.5rem] border border-white w-full md:max-w-4xl shadow-sm">
+                    <div className="flex overflow-x-auto no-scrollbar items-center gap-3 bg-white/50 p-3 rounded-[2.5rem] border border-white w-full md:max-w-4xl shadow-sm pb-3 md:pb-3">
                         {initialCategories.map((cat) => (
                             <button
                                 key={cat}
                                 onClick={() => setActiveCategory(cat)}
                                 className={cn(
-                                    "px-6 py-3 rounded-full text-[10px] font-black uppercase tracking-widest transition-all",
+                                    "px-6 py-3 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap",
                                     activeCategory === cat
                                         ? "bg-brand-olive-dark text-white shadow-lg scale-105"
-                                        : "text-brand-olive-dark/40 hover:text-brand-olive-dark hover:bg-white"
+                                        : "text-brand-olive-dark/70 hover:text-brand-olive-dark hover:bg-white"
                                 )}
+                                aria-pressed={activeCategory === cat}
                             >
                                 {cat}
                             </button>
@@ -89,10 +90,11 @@ export default function OrderClient({ initialProducts, initialCategories, user: 
                     </div>
 
                     <div className="relative w-full md:w-96 group">
-                        <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-brand-gold-bright transition-colors" size={20} />
+                        <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-brand-gold-bright transition-colors" size={20} aria-hidden="true" />
                         <input
                             type="text"
                             placeholder="Search products..."
+                            aria-label="Search products"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className="w-full bg-white border-2 border-transparent focus:border-brand-gold-bright/30 outline-none rounded-[2rem] py-4 pl-14 pr-8 text-sm font-bold text-brand-olive-dark shadow-sm transition-all"
@@ -145,14 +147,14 @@ export default function OrderClient({ initialProducts, initialCategories, user: 
                                         <div className="space-y-2">
                                             <h4 className="text-xl font-serif font-black text-brand-olive-dark leading-tight">{product.name}</h4>
                                             {product.description && (
-                                                <p className="text-xs text-gray-400 font-medium line-clamp-2 leading-relaxed">
+                                                <p className="text-xs text-gray-600 font-medium line-clamp-2 leading-relaxed">
                                                     {product.description}
                                                 </p>
                                             )}
                                             <div className="pt-2">
                                                 <p className="text-2xl font-black text-brand-gold-bright flex items-baseline gap-2">
                                                     ₹{product.price}
-                                                    <span className="text-[10px] uppercase tracking-widest text-gray-400 font-bold">/ {product.unit}</span>
+                                                    <span className="text-[10px] uppercase tracking-widest text-gray-600 font-bold">/ {product.unit}</span>
                                                 </p>
                                             </div>
                                         </div>
@@ -163,16 +165,18 @@ export default function OrderClient({ initialProducts, initialCategories, user: 
                                                     <button
                                                         onClick={() => updateQuantity(product.id, cartItem.quantity - 1)}
                                                         className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-brand-olive-dark hover:text-brand-gold-bright transition-colors shadow-sm active:scale-90"
+                                                        aria-label={`Decrease quantity for ${product.name}`}
                                                     >
-                                                        <Minus size={18} />
+                                                        <Minus size={18} aria-hidden="true" />
                                                     </button>
                                                     <span className="font-black text-brand-olive-dark text-lg px-4">{cartItem.quantity}</span>
                                                     <button
                                                         onClick={() => updateQuantity(product.id, cartItem.quantity + 1)}
                                                         disabled={!isAvailable}
                                                         className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-brand-olive-dark hover:text-brand-gold-bright transition-colors shadow-sm active:scale-90 disabled:opacity-30"
+                                                        aria-label={`Increase quantity for ${product.name}`}
                                                     >
-                                                        <Plus size={18} />
+                                                        <Plus size={18} aria-hidden="true" />
                                                     </button>
                                                 </div>
                                             ) : (
