@@ -27,7 +27,7 @@ export default async function BakeryOrderPage() {
     }
 
     const products = prodRes.products || [];
-    const categories = ["All", ...(catRes.categories?.map((c: any) => c.name) || [])];
+    const categories = ["All", ...('categories' in catRes ? catRes.categories.map((c: any) => c.name) : [])];
 
     // 3. Render client component with pre-fetched, cached data
     return (

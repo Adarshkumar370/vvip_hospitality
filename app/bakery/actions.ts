@@ -544,36 +544,36 @@ export async function getHealthStatus() {
 
 const getCachedProducts = unstable_cache(
     async () => {
-        try {
-            const products = await sql`
-                SELECT
-                    p.id,
-                    p.name,
-                    pc.name AS category,
-                    p.price,
-                    p.image_url AS image,
-                    COALESCE(p.short_description, p.long_description, '') AS description,
-                    mu.symbol AS unit,
-                    p.max_daily_limit,
-                    p.status,
-                    p.created_at
-                FROM products p
-                JOIN product_categories pc ON pc.id = p.category_id
-                JOIN measurement_units mu ON mu.id = p.unit_id
-                ORDER BY p.created_at DESC
-            `;
-            return { success: true, products: products.map(toProductView) };
-        } catch (err) {
-            console.error("Failed to fetch products:", err);
-            return { success: false, error: "Database error" };
-        }
+        const products = await sql`
+            SELECT
+                p.id,
+                p.name,
+                pc.name AS category,
+                p.price,
+                p.image_url AS image,
+                COALESCE(p.short_description, p.long_description, '') AS description,
+                mu.symbol AS unit,
+                p.max_daily_limit,
+                p.status,
+                p.created_at
+            FROM products p
+            JOIN product_categories pc ON pc.id = p.category_id
+            JOIN measurement_units mu ON mu.id = p.unit_id
+            ORDER BY p.created_at DESC
+        `;
+        return { success: true as const, products: products.map(toProductView) };
     },
     ["bakery-products-v2"],
     { revalidate: 60, tags: ["products"] }
 );
 
 export async function getProducts() {
-    return getCachedProducts();
+    try {
+        return await getCachedProducts();
+    } catch (err) {
+        console.error("Failed to fetch products:", err);
+        return { success: false as const, error: "Database error" };
+    }
 }
 
 export async function getProductsForUser(userId: string | number) {
@@ -583,44 +583,41 @@ export async function getProductsForUser(userId: string | number) {
 
     const fetcher = unstable_cache(
         async (uId: string) => {
-            try {
-                const products = await sql`
-                    SELECT 
-                        p.id,
-                        p.name,
-                        pc.name AS category,
-                        COALESCE(upp.price, p.price) AS price,
-                        p.price AS original_price,
-                        p.image_url AS image,
-                        COALESCE(p.short_description, p.long_description, '') AS description,
-                        mu.symbol AS unit,
-                        p.max_daily_limit,
-                        p.status,
-                        CASE WHEN upp.price IS NOT NULL THEN true ELSE false END AS is_custom_price
-                    FROM products p
-                    JOIN product_categories pc ON pc.id = p.category_id
-                    JOIN measurement_units mu ON mu.id = p.unit_id
-                    LEFT JOIN user_product_prices upp
-                        ON p.id = upp.product_id
-                       AND upp.user_id = ${uId}
-                       AND upp.is_active = true
-                    WHERE p.status = 'show'
-                      AND pc.status = 'show'
-                    ORDER BY pc.name ASC, p.name ASC
-                `;
-                return { 
-                    success: true, 
-                    products: products.map(toProductView)
-                };
-            } catch (err) {
-                console.error("Failed to fetch products for user:", err);
-                return { success: false, error: "Database error" };
-            }
+            const products = await sql`
+                SELECT
+                    p.id,
+                    p.name,
+                    pc.name AS category,
+                    COALESCE(upp.price, p.price) AS price,
+                    p.price AS original_price,
+                    p.image_url AS image,
+                    COALESCE(p.short_description, p.long_description, '') AS description,
+                    mu.symbol AS unit,
+                    p.max_daily_limit,
+                    p.status,
+                    CASE WHEN upp.price IS NOT NULL THEN true ELSE false END AS is_custom_price
+                FROM products p
+                JOIN product_categories pc ON pc.id = p.category_id
+                JOIN measurement_units mu ON mu.id = p.unit_id
+                LEFT JOIN user_product_prices upp
+                    ON p.id = upp.product_id
+                   AND upp.user_id = ${uId}
+                   AND upp.is_active = true
+                WHERE p.status = 'show'
+                  AND pc.status = 'show'
+                ORDER BY pc.name ASC, p.name ASC
+            `;
+            return { success: true as const, products: products.map(toProductView) };
         },
         [`user-products-v2-${userId}`],
         { revalidate: 300, tags: ["products", `user-products-${userId}`] }
     );
-    return fetcher(userId);
+    try {
+        return await fetcher(userId as string);
+    } catch (err) {
+        console.error("Failed to fetch products for user:", err);
+        return { success: false as const, error: "Database error" };
+    }
 }
 
 export async function addProduct(product: { name: string, category: string, price: number, image: string, description: string, unit: string, max_daily_limit: number }) {
@@ -675,25 +672,25 @@ export async function deleteProduct(id: string | number) {
 
 const getCachedCategories = unstable_cache(
     async () => {
-        try {
-            const categories = await sql`
-                SELECT id, name, short_description, status, created_at
-                FROM product_categories
-                WHERE status = 'show'
-                ORDER BY display_order ASC, name ASC
-            `;
-            return { success: true, categories };
-        } catch (err) {
-            console.error("Failed to fetch categories:", err);
-            return { success: false, error: "Database error" };
-        }
+        const categories = await sql`
+            SELECT id, name, short_description, status, created_at
+            FROM product_categories
+            WHERE status = 'show'
+            ORDER BY display_order ASC, name ASC
+        `;
+        return { success: true as const, categories };
     },
     ["bakery-categories-v4"],
     { revalidate: 300, tags: ["categories"] }
 );
 
 export async function getCategories() {
-    return getCachedCategories();
+    try {
+        return await getCachedCategories();
+    } catch (err) {
+        console.error("Failed to fetch categories:", err);
+        return { success: false as const, error: "Database error" };
+    }
 }
 
 export async function addCategory(name: string) {
