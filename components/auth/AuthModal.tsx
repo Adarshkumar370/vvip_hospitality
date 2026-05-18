@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Phone, Lock, ArrowRight, CheckCircle2, Loader2, Smartphone, User, Mail } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
-import { checkUser, registerUser, sendOtp, verifyOtp, loginUser } from "@/app/bakery/actions";
+import { checkUser, registerUser, verifyFirebaseToken, loginUser } from "@/app/bakery/actions";
 import { useAuth } from "@/context/AuthContext";
+import { RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult } from "firebase/auth";
+import { auth } from "@/lib/firebase/client";
 
 interface AuthModalProps {
     isOpen: boolean;
@@ -23,9 +25,43 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
     const [step, setStep] = useState<"phone" | "otp" | "signup" | "success">("phone");
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState("");
-    const [sessionId, setSessionId] = useState("");
+    const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
+    const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
+    const recaptchaContainerRef = useRef<HTMLDivElement | null>(null);
+    const recaptchaHostRef = useRef<HTMLDivElement | null>(null);
 
-    // Reset state on close
+    const normalizeIndianMobile = (value: string) => value.replace(/\D/g, "").slice(0, 10);
+    const toE164IndianMobile = (value: string) => `+91${normalizeIndianMobile(value)}`;
+    const maskPhoneForLog = (value: string) => value.replace(/^(\+91)(\d{2})\d{4}(\d{4})$/, "$1$2XXXX$3");
+
+    const clearRecaptcha = () => {
+        recaptchaVerifierRef.current?.clear();
+        recaptchaVerifierRef.current = null;
+        if (recaptchaContainerRef.current) {
+            recaptchaContainerRef.current.innerHTML = "";
+        }
+        recaptchaHostRef.current = null;
+    };
+
+    const getRecaptchaVerifier = () => {
+        if (recaptchaVerifierRef.current) {
+            return recaptchaVerifierRef.current;
+        }
+
+        if (!recaptchaContainerRef.current) {
+            throw new Error("reCAPTCHA container not found");
+        }
+
+        recaptchaContainerRef.current.innerHTML = "";
+        const host = document.createElement("div");
+        recaptchaContainerRef.current.appendChild(host);
+        recaptchaHostRef.current = host;
+
+        const verifier = new RecaptchaVerifier(auth, host, { size: "invisible" });
+        recaptchaVerifierRef.current = verifier;
+        return verifier;
+    };
+
     useEffect(() => {
         if (!isOpen) {
             setStep("phone");
@@ -34,11 +70,14 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
             setName("");
             setEmail("");
             setError("");
+            setConfirmationResult(null);
+            clearRecaptcha();
         }
     }, [isOpen]);
 
     const handleSendOtp = async () => {
-        if (!phone || phone.length < 10) {
+        const normalizedPhone = normalizeIndianMobile(phone);
+        if (normalizedPhone.length !== 10) {
             setError("Please enter a valid 10-digit phone number");
             return;
         }
@@ -47,16 +86,39 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
         setError("");
 
         try {
-            // OTP is sent via a Server Action — the API key never reaches the browser.
-            const result = await sendOtp(phone);
-            if (result.success) {
-                setSessionId(result.sessionId || "");
-                setStep("otp");
-            } else {
-                setError(result.error || "Failed to send OTP. Please try again.");
+            const verifier = getRecaptchaVerifier();
+            const e164Phone = toE164IndianMobile(normalizedPhone);
+            console.info("[Firebase OTP] app context:", {
+                origin: window.location.origin,
+                hostname: window.location.hostname,
+                authDomain: auth.app.options.authDomain,
+                projectId: auth.app.options.projectId,
+            });
+            console.info("[Firebase OTP] sending OTP to:", maskPhoneForLog(e164Phone));
+            const result = await signInWithPhoneNumber(auth, e164Phone, verifier);
+            setPhone(normalizedPhone);
+            setConfirmationResult(result);
+            setStep("otp");
+        } catch (err: any) {
+            if (err?.message?.includes("already been rendered")) {
+                clearRecaptcha();
             }
-        } catch {
-            setError("Network error. Please check your connection and try again.");
+            console.error("[Firebase OTP] sendOtp error:", err.code, err.message);
+            if (err.code === "auth/invalid-phone-number") {
+                setError("Invalid phone number. Please check and try again.");
+            } else if (err.code === "auth/too-many-requests") {
+                setError("Too many attempts. Please try again later.");
+            } else if (err.code === "auth/operation-not-allowed") {
+                setError("Phone sign-in is not enabled. Please contact support.");
+            } else if (err.code === "auth/invalid-app-credential") {
+                setError("Phone auth app verification failed. Check Firebase authorized domains, API key restrictions, and reCAPTCHA/app verification setup.");
+            } else if (err.code === "auth/captcha-check-failed") {
+                setError("reCAPTCHA check failed. Please refresh and try again.");
+            } else if (err.code === "auth/network-request-failed") {
+                setError("Could not reach Google's servers. Disable any ad-blockers and try again, or try in an incognito window.");
+            } else {
+                setError(`Failed to send OTP (${err.code ?? "unknown"}). Please try again.`);
+            }
         } finally {
             setIsLoading(false);
         }
@@ -67,21 +129,34 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
             setError("Please enter the complete 6-digit OTP");
             return;
         }
+        if (!confirmationResult) {
+            setError("Session expired. Please request a new OTP.");
+            setStep("phone");
+            return;
+        }
 
         setIsLoading(true);
         setError("");
 
         try {
-            // Verification is done via a Server Action — never trust the client.
-            const result = await verifyOtp(sessionId, otp);
+            const credential = await confirmationResult.confirm(otp);
+            const idToken = await credential.user.getIdToken();
+            const result = await verifyFirebaseToken(idToken, phone);
+
             if (result.success) {
                 await handlePostAuthCheck();
             } else {
                 setError(result.error || "Invalid OTP. Please try again.");
             }
-        } catch {
-            // Never grant access on failure
-            setError("Verification failed. Please try again.");
+        } catch (err: any) {
+            if (err.code === "auth/invalid-verification-code") {
+                setError("Invalid OTP. Please try again.");
+            } else if (err.code === "auth/code-expired") {
+                setError("OTP expired. Please request a new one.");
+                setStep("phone");
+            } else {
+                setError("Verification failed. Please try again.");
+            }
         } finally {
             setIsLoading(false);
         }
@@ -139,6 +214,9 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                         {/* Dark Header Strip */}
                         <div className="bg-brand-olive-dark h-2 w-full" />
 
+                        {/* Invisible reCAPTCHA container */}
+                        <div id="recaptcha-container" ref={recaptchaContainerRef} />
+
                         <button
                             onClick={onClose}
                             className="absolute top-6 right-6 text-gray-400 hover:text-brand-olive-dark transition-colors"
@@ -173,7 +251,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                                                 placeholder="Mobile Number"
                                                 value={phone}
                                                 onChange={(e) => {
-                                                    const val = e.target.value.replace(/\D/g, "");
+                                                    const val = normalizeIndianMobile(e.target.value);
                                                     if (val.length <= 10) setPhone(val);
                                                 }}
                                                 className="w-full bg-brand-soft-gray border-2 border-transparent focus:border-brand-gold-bright/30 focus:bg-white outline-none rounded-2xl py-5 pl-24 pr-6 text-lg font-bold text-brand-olive-dark transition-all"
@@ -220,7 +298,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                                         </div>
                                         {error && <p className="text-red-500 text-sm font-black text-center tracking-tight">{error}</p>}
                                         <button
-                                            onClick={() => setStep("phone")}
+                                            onClick={() => { setStep("phone"); setOtp(""); setError(""); clearRecaptcha(); }}
                                             className="w-full text-brand-gold-bright text-xs font-black uppercase tracking-widest hover:underline"
                                         >
                                             Change Number

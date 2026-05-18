@@ -337,75 +337,27 @@ export async function verifySession(): Promise<{ isAdmin: true }> {
 }
 
 // ---------------------------------------------------------------------------
-// OTP Server Actions (keeps API key out of the browser bundle)
+// OTP Server Actions — Firebase Phone Auth token verification
 // ---------------------------------------------------------------------------
-export async function sendOtp(phone: string) {
+export async function verifyFirebaseToken(idToken: string, phone: string) {
     const parsed = phoneSchema.safeParse(phone);
     if (!parsed.success) return { success: false as const, error: "Invalid phone number" };
 
-    // ── DEV-ONLY BYPASS ─────────────────────────────────────────────────────
-    // Skips real SMS to avoid costs during local development.
-    // This block is eliminated in production builds (NODE_ENV !== 'development').
-    if (process.env.NODE_ENV === "development" && parsed.data === "8860792647") {
-        console.warn("[DEV] OTP send bypassed for test number 8860792647.");
-        return { success: true as const, sessionId: "dev-bypass-session" };
-    }
-    // ────────────────────────────────────────────────────────────────────────
-
-    const apiKey = process.env.TWO_FACTOR_API_KEY;
-    const template = process.env.OTP_TEMPLATE_NAME || "AUTOGEN2";
-
-    if (!apiKey) {
-        console.error("TWO_FACTOR_API_KEY is not configured");
-        return { success: false as const, error: "OTP service is not configured" };
-    }
+    if (!idToken) return { success: false as const, error: "Missing authentication token" };
 
     try {
-        const fullPhone = `91${parsed.data}`;
-        const url = `https://2factor.in/API/V1/${apiKey}/SMS/${fullPhone}/AUTOGEN2/${template}`;
-        const response = await fetch(url, { cache: "no-store" });
-        const data = await response.json();
+        const { verifyFirebaseIdToken } = await import("@/lib/firebase/verify");
+        const decoded = await verifyFirebaseIdToken(idToken);
 
-        if (data.Status === "Success") {
-            return { success: true as const, sessionId: data.Details as string };
+        const firebasePhone = decoded.phone_number;
+        if (!firebasePhone || firebasePhone !== `+91${parsed.data}`) {
+            return { success: false as const, error: "Phone number mismatch. Please try again." };
         }
-        return { success: false as const, error: data.Details || "Failed to send OTP" };
-    } catch (err) {
-        console.error("sendOtp failed:", err);
-        return { success: false as const, error: "OTP service unavailable. Please try again." };
-    }
-}
 
-export async function verifyOtp(sessionId: string, otp: string) {
-    if (!sessionId || !otp || !/^\d{4,6}$/.test(otp)) {
-        return { success: false as const, error: "Invalid OTP format" };
-    }
-
-    // ── DEV-ONLY BYPASS ─────────────────────────────────────────────────────
-    if (process.env.NODE_ENV === "development" && otp === "123456") {
-        console.warn("[DEV] OTP verification bypassed with master code 123456.");
         return { success: true as const };
-    }
-    // ────────────────────────────────────────────────────────────────────────
-
-    const apiKey = process.env.TWO_FACTOR_API_KEY;
-    if (!apiKey) {
-        return { success: false as const, error: "OTP service is not configured" };
-    }
-
-    try {
-        const url = `https://2factor.in/API/V1/${apiKey}/SMS/VERIFY/${sessionId}/${otp}`;
-        const response = await fetch(url, { cache: "no-store" });
-        const data = await response.json();
-
-        if (data.Status === "Success" || data.Details === "OTP Matched") {
-            return { success: true as const };
-        }
-        return { success: false as const, error: "Invalid OTP. Please try again." };
     } catch (err) {
-        console.error("verifyOtp failed:", err);
-        // SECURITY: Never grant access on error
-        return { success: false as const, error: "Verification service unavailable. Please try again." };
+        console.error("Firebase token verification failed:", err);
+        return { success: false as const, error: "Verification failed. Please try again." };
     }
 }
 

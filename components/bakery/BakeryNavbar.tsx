@@ -65,6 +65,7 @@ export default function BakeryNavbar() {
                                 src="/images/bakery_logo.jpeg"
                                 alt="Swiss Affaire - The Bake Studio Logo"
                                 fill
+                                sizes="48px"
                                 className="object-cover"
                             />
                         </div>
