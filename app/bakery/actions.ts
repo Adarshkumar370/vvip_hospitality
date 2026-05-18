@@ -1467,7 +1467,13 @@ export async function createRazorpayOrder(amount: number, localOrderId?: string 
             `;
             localOrder = orders[0];
             if (!localOrder) return { success: false, error: "Order not found" };
-            amountToCharge = Number(localOrder.total_amount);
+            const dbAmount = Number(localOrder.total_amount);
+            // Use DB amount if valid, otherwise fall back to the caller-supplied amount
+            amountToCharge = dbAmount > 0 ? dbAmount : amount;
+        }
+
+        if (!amountToCharge || amountToCharge <= 0) {
+            return { success: false, error: "Invalid order amount" };
         }
 
         const options = {
@@ -1501,9 +1507,10 @@ export async function createRazorpayOrder(amount: number, localOrderId?: string 
             `;
         }
         return { success: true, orderId: order.id, amount: order.amount, keyId: resolveRazorpayKeyId() };
-    } catch (err) {
-        console.error("Razorpay Order Creation Failed:", err);
-        return { success: false, error: "Failed to initialize payment" };
+    } catch (err: any) {
+        const detail = err?.error?.description || err?.message || String(err);
+        console.error("Razorpay Order Creation Failed:", detail, err);
+        return { success: false, error: `Payment error: ${detail}` };
     }
 }
 
@@ -1642,15 +1649,10 @@ const placeOrderSchema = z.object({
 export async function placeOrder(userId: string | number, items: { id: string | number, quantity: number }[], frontendTotal: number, addressId: string | number) {
     try {
         // 1. Verify User Session
-        const session = await getIronSession<{ user?: any }>(await cookies(), {
-            password: process.env.SECRET_COOKIE_PASSWORD || "complex_password_at_least_32_characters_long",
-            cookieName: "vvip_user_session",
-        });
-
-        // Uncomment session check when testing in real environment
-        // if (!session?.user || session.user.id !== userId) {
-        //    return { success: false, error: "Unauthorized" };
-        // }
+        const session = await getIronSession<UserSessionData>(await cookies(), userSessionOptions);
+        if (!session?.user) {
+            return { success: false, error: "Unauthorized. Please log in again." };
+        }
 
         // 2. Input Validation
         const parsed = placeOrderSchema.safeParse({ userId, items, addressId });
