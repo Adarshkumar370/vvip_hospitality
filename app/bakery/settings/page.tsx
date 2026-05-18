@@ -16,7 +16,8 @@ import {
     Save,
     Loader2,
     ArrowLeft,
-    LogOut
+    LogOut,
+    Download
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -440,6 +441,19 @@ export default function SettingsPage() {
                                                             </div>
                                                         </div>
                                                         <div className="p-6 space-y-4">
+                                                            {order.invoice_pdf_url && (
+                                                                <a
+                                                                    href={order.invoice_pdf_url}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="inline-flex items-center gap-2 rounded-xl bg-brand-olive-dark px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white shadow-sm transition-all hover:bg-brand-gold-bright hover:text-brand-olive-dark"
+                                                                >
+                                                                    <Download size={14} aria-hidden="true" />
+                                                                    Download Invoice
+                                                                    {order.invoice_number ? ` ${order.invoice_number}` : ""}
+                                                                </a>
+                                                            )}
+
                                                             {/* Items */}
                                                             <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
                                                                 {order.items.map((item: any) => (

@@ -12,6 +12,7 @@
 
 # testing
 /coverage
+/local-invoices/
 
 # next.js
 /.next/

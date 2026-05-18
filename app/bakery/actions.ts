@@ -350,7 +350,17 @@ export async function verifyFirebaseToken(idToken: string, phone: string) {
         const decoded = await verifyFirebaseIdToken(idToken);
 
         const firebasePhone = decoded.phone_number;
-        if (!firebasePhone || firebasePhone !== `+91${parsed.data}`) {
+        const expectedPhone = normalizeMobileNo(parsed.data);
+        const normalizedFirebasePhone = firebasePhone ? normalizeMobileNo(firebasePhone) : null;
+
+        console.info("Firebase token verification:", {
+            uid: decoded.uid,
+            expectedPhone,
+            firebasePhone,
+            normalizedFirebasePhone,
+        });
+
+        if (!normalizedFirebasePhone || normalizedFirebasePhone !== expectedPhone) {
             return { success: false as const, error: "Phone number mismatch. Please try again." };
         }
 
@@ -1356,6 +1366,8 @@ export async function getUserOrders(userId: string | number) {
                 o.order_status,
                 o.total_amount,
                 o.created_at,
+                inv.invoice_number,
+                inv.invoice_pdf_url,
                 CASE
                     WHEN EXISTS (
                         SELECT 1 FROM payments pay
@@ -1382,10 +1394,17 @@ export async function getUserOrders(userId: string | number) {
                     '[]'
                 ) AS items
             FROM orders o
+            LEFT JOIN LATERAL (
+                SELECT invoice_number, invoice_pdf_url
+                FROM invoices
+                WHERE order_id = o.id
+                ORDER BY created_at DESC
+                LIMIT 1
+            ) inv ON true
             LEFT JOIN order_items oi ON oi.order_id = o.id
             LEFT JOIN products    p  ON p.id = oi.product_id
             WHERE o.user_id = ${userId}
-            GROUP BY o.id
+            GROUP BY o.id, inv.invoice_number, inv.invoice_pdf_url
             ORDER BY o.created_at DESC
         `;
         return { success: true, orders: orders.map(toOrderView) };
@@ -1565,7 +1584,15 @@ export async function verifyRazorpayPayment(
                     ON CONFLICT (payment_id) DO NOTHING
                 `;
             });
-            return { success: true };
+
+            try {
+                const { generateAndUploadInvoicePdfForOrder } = await import("@/lib/invoice-service");
+                const invoice = await generateAndUploadInvoicePdfForOrder(sql, orderId);
+                return { success: true, invoice };
+            } catch (invoiceErr) {
+                console.error("Invoice PDF upload failed after successful payment:", invoiceErr);
+                return { success: true, invoiceError: "Payment captured, but invoice PDF upload failed." };
+            }
         }
 
         const [order] = await sql`
