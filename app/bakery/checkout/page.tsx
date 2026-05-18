@@ -91,7 +91,7 @@ export default function CheckoutPage() {
 
             // 3. Open Razorpay Checkout
             const options = {
-                key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+                key: razorpayRes.keyId || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
                 amount: razorpayRes.amount,
                 currency: "INR",
                 name: "Swiss Affaire - The Bake Studio",

@@ -1450,11 +1450,11 @@ let razorpayInstance: any = null;
 function getRazorpay() {
     if (razorpayInstance) return razorpayInstance;
 
-    const key_id = process.env.RAZORPAY_KEY_ID;
-    const key_secret = process.env.RAZORPAY_KEY_SECRET;
+    const key_id = resolveRazorpayKeyId();
+    const key_secret = resolveRazorpayKeySecret();
 
     if (!key_id || !key_secret) {
-        console.warn("Razorpay keys are missing. Payment features will be disabled.");
+        console.warn("Razorpay keys are missing. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in production.");
         return null;
     }
 
@@ -1464,6 +1464,24 @@ function getRazorpay() {
         key_secret,
     });
     return razorpayInstance;
+}
+
+function resolveRazorpayKeyId() {
+    return (
+        process.env.RAZORPAY_KEY_ID ||
+        process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ||
+        process.env.RAZORPAY_PUBLIC_KEY_ID ||
+        ""
+    );
+}
+
+function resolveRazorpayKeySecret() {
+    return (
+        process.env.RAZORPAY_KEY_SECRET ||
+        process.env.RAZORPAY_SECRET ||
+        process.env.RAZORPAY_API_SECRET ||
+        ""
+    );
 }
 
 export async function createRazorpayOrder(amount: number, localOrderId?: string | number) {
@@ -1511,7 +1529,7 @@ export async function createRazorpayOrder(amount: number, localOrderId?: string 
                     payment_status = 'pending'
             `;
         }
-        return { success: true, orderId: order.id, amount: order.amount };
+        return { success: true, orderId: order.id, amount: order.amount, keyId: resolveRazorpayKeyId() };
     } catch (err) {
         console.error("Razorpay Order Creation Failed:", err);
         return { success: false, error: "Failed to initialize payment" };
