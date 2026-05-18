@@ -11,7 +11,10 @@
       "WebSearch",
       "WebFetch(domain:2fa.api-docs.io)",
       "Bash(npm install *)",
-      "Bash(not exist *)"
+      "Bash(not exist *)",
+      "Bash(Get-ChildItem -Path \"D:\\\\Projects\\\\vvip_hospitality\" -Directory)",
+      "Bash(Select-Object Name)",
+      "Bash(npx tsc *)"
     ]
   }
 }

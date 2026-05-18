@@ -1805,3 +1805,36 @@ export async function setUserPrice(userId: string | number, productId: string | 
         return { success: false, error: "Database error" };
     }
 }
+
+export async function retryInvoiceGeneration(orderId: string, userId: string) {
+    if (!isUuid(orderId) || !isUuid(userId)) {
+        return { success: false, error: "Invalid order or user ID" };
+    }
+
+    try {
+        const session = await getIronSession<UserSessionData>(await cookies(), userSessionOptions);
+        if (!session?.user) {
+            return { success: false, error: "Unauthorized. Please sign in again." };
+        }
+
+        const [order] = await sql`
+            SELECT id FROM orders
+            WHERE id = ${orderId} AND user_id = ${userId}
+        `;
+        if (!order) return { success: false, error: "Order not found" };
+
+        const [payment] = await sql`
+            SELECT id FROM payments
+            WHERE order_id = ${orderId} AND payment_status = 'succeeded'
+            LIMIT 1
+        `;
+        if (!payment) return { success: false, error: "No successful payment found for this order" };
+
+        const { generateAndUploadInvoicePdfForOrder } = await import("@/lib/invoice-service");
+        const invoice = await generateAndUploadInvoicePdfForOrder(sql, orderId);
+        return { success: true, invoicePdfUrl: invoice.invoicePdfUrl, invoiceNumber: invoice.invoiceNumber };
+    } catch (err: any) {
+        console.error("Failed to retry invoice generation:", err);
+        return { success: false, error: err?.message || "Invoice generation failed" };
+    }
+}

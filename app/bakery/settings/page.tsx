@@ -29,7 +29,8 @@ import {
     addAddress,
     updateAddress,
     deleteAddress,
-    getUserOrders
+    getUserOrders,
+    retryInvoiceGeneration
 } from "@/app/bakery/actions";
 
 type Tab = "profile" | "addresses" | "orders";
@@ -62,6 +63,7 @@ export default function SettingsPage() {
     const [orders, setOrders] = useState<any[]>([]);
     const [isLoadingData, setIsLoadingData] = useState(false);
     const [orderTab, setOrderTab] = useState<"ongoing" | "pending" | "completed">("ongoing");
+    const [generatingInvoice, setGeneratingInvoice] = useState<string | null>(null);
 
     useEffect(() => {
         if (!isAuthLoading && !user) {
@@ -91,6 +93,23 @@ export default function SettingsPage() {
         if (addrRes.success) setAddresses(addrRes.addresses || []);
         if (orderRes.success) setOrders(orderRes.orders || []);
         setIsLoadingData(false);
+    };
+
+    const handleGenerateInvoice = async (orderId: string) => {
+        if (!user) return;
+        setGeneratingInvoice(orderId);
+        const res = await retryInvoiceGeneration(orderId, String(user.id));
+        if (res.success) {
+            setOrders(prev => prev.map(o =>
+                o.id === orderId
+                    ? { ...o, invoice_pdf_url: res.invoicePdfUrl, invoice_number: res.invoiceNumber }
+                    : o
+            ));
+        } else {
+            setMessage({ type: "error", text: res.error || "Failed to generate invoice." });
+            setTimeout(() => setMessage(null), 3000);
+        }
+        setGeneratingInvoice(null);
     };
 
     const handleProfileUpdate = async (e: React.FormEvent) => {
@@ -441,7 +460,7 @@ export default function SettingsPage() {
                                                             </div>
                                                         </div>
                                                         <div className="p-6 space-y-4">
-                                                            {order.invoice_pdf_url && (
+                                                            {order.invoice_pdf_url ? (
                                                                 <a
                                                                     href={order.invoice_pdf_url}
                                                                     target="_blank"
@@ -452,6 +471,17 @@ export default function SettingsPage() {
                                                                     Download Invoice
                                                                     {order.invoice_number ? ` ${order.invoice_number}` : ""}
                                                                 </a>
+                                                            ) : order.payment_status === 'paid' && (
+                                                                <button
+                                                                    onClick={() => handleGenerateInvoice(order.id)}
+                                                                    disabled={generatingInvoice === order.id}
+                                                                    className="inline-flex items-center gap-2 rounded-xl bg-brand-olive-dark px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white shadow-sm transition-all hover:bg-brand-gold-bright hover:text-brand-olive-dark disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                >
+                                                                    {generatingInvoice === order.id
+                                                                        ? <><Loader2 size={14} className="animate-spin" aria-hidden="true" /> Download Invoice</>
+                                                                        : <><Download size={14} aria-hidden="true" /> Download Invoice</>
+                                                                    }
+                                                                </button>
                                                             )}
 
                                                             {/* Items */}
