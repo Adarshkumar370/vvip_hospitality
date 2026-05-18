@@ -365,8 +365,8 @@ export async function verifyFirebaseToken(idToken: string, phone: string) {
         }
 
         return { success: true as const };
-    } catch (err) {
-        console.error("Firebase token verification failed:", err);
+    } catch (err: any) {
+        console.error("Firebase token verification failed:", err?.code, err?.message, err);
         return { success: false as const, error: "Verification failed. Please try again." };
     }
 }

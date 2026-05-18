@@ -19,7 +19,7 @@ const securityHeaders = [
       "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://checkout.razorpay.com https://www.google.com https://www.gstatic.com",
       "style-src 'self' 'unsafe-inline'",
       // Supabase, Razorpay, and Firebase Auth / reCAPTCHA APIs
-      "connect-src 'self' https://*.supabase.co https://api.razorpay.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://firebaseinstallations.googleapis.com https://www.google.com",
+      "connect-src 'self' https://*.supabase.co https://api.razorpay.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://firebaseinstallations.googleapis.com https://firebase.googleapis.com https://www.google.com https://recaptcha.google.com",
       "font-src 'self'",
       "frame-src 'self' https://www.google.com https://recaptcha.google.com https://api.razorpay.com https://checkout.razorpay.com",
       "frame-ancestors 'none'",
