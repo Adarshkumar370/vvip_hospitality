@@ -149,13 +149,16 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                 setError(result.error || "Invalid OTP. Please try again.");
             }
         } catch (err: any) {
+            console.error("[OTP Verify] error code:", err?.code, "message:", err?.message);
             if (err.code === "auth/invalid-verification-code") {
                 setError("Invalid OTP. Please try again.");
-            } else if (err.code === "auth/code-expired") {
+            } else if (err.code === "auth/code-expired" || err.code === "auth/session-expired") {
                 setError("OTP expired. Please request a new one.");
                 setStep("phone");
+            } else if (err.code === "auth/too-many-requests") {
+                setError("Too many attempts. Please try again later.");
             } else {
-                setError("Verification failed. Please try again.");
+                setError(`Verification failed (${err?.code ?? "unknown"}). Please try again.`);
             }
         } finally {
             setIsLoading(false);
