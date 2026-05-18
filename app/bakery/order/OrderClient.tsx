@@ -19,7 +19,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 
 interface Product {
-    id: number;
+    id: string | number;
     name: string;
     category: string;
     price: number;
@@ -32,7 +32,7 @@ interface Product {
 interface OrderClientProps {
     initialProducts: Product[];
     initialCategories: string[];
-    user: { id: number, name: string };
+    user: { id: string | number, name: string };
 }
 
 export default function OrderClient({ initialProducts, initialCategories, user: serverUser }: OrderClientProps) {

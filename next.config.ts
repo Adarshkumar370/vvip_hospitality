@@ -21,7 +21,7 @@ const securityHeaders = [
       // Allow API calls to Supabase, 2Factor, and Razorpay
       "connect-src 'self' https://*.supabase.co https://api.razorpay.com",
       "font-src 'self'",
-      "frame-src 'self' https://www.google.com https://api.razorpay.com",
+      "frame-src 'self' https://www.google.com https://api.razorpay.com https://checkout.razorpay.com",
       "frame-ancestors 'none'",
     ].join("; "),
   },

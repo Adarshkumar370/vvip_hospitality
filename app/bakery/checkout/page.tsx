@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
-import { getAddresses, addAddress, createRazorpayOrder, verifyRazorpayPayment, placeOrder, completeOrderDummy } from "@/app/bakery/actions";
+import { getAddresses, addAddress, createRazorpayOrder, verifyRazorpayPayment, placeOrder } from "@/app/bakery/actions";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
 
@@ -31,7 +31,7 @@ export default function CheckoutPage() {
     const router = useRouter();
 
     const [addresses, setAddresses] = useState<any[]>([]);
-    const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
+    const [selectedAddressId, setSelectedAddressId] = useState<string | number | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isProcessing, setIsProcessing] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -81,28 +81,17 @@ export default function CheckoutPage() {
 
         try {
             // 1. Create a "pending" order in our DB
-            const itemsPayload = cart.map(item => ({ id: Number(item.id), quantity: item.quantity }));
+            const itemsPayload = cart.map(item => ({ id: item.id, quantity: item.quantity }));
             const orderRes = await placeOrder(user.id, itemsPayload, totalPrice, selectedAddressId) as any;
             if (!orderRes.success) throw new Error(orderRes.error || "Failed to place order");
 
-            // 2. Dummy Payment Simulation (Skip Razorpay)
-            const verifyRes = await completeOrderDummy(orderRes.orderId);
-
-            if (verifyRes.success) {
-                clearCart();
-                router.push("/bakery/settings?tab=orders");
-            } else {
-                setError("Dummy payment failed. Please check logs.");
-                setIsProcessing(false);
-            }
-            /* Original Razorpay Flow (Hidden for testing)
             // 2. Create Razorpay Order
-            const razorpayRes = await createRazorpayOrder(totalPrice);
+            const razorpayRes = await createRazorpayOrder(totalPrice, orderRes.orderId);
             if (!razorpayRes.success) throw new Error(razorpayRes.error || "Failed to initialize payment");
 
             // 3. Open Razorpay Checkout
             const options = {
-                key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID, // Ensure this is set in your env
+                key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
                 amount: razorpayRes.amount,
                 currency: "INR",
                 name: "Swiss Affaire - The Bake Studio",
@@ -131,7 +120,7 @@ export default function CheckoutPage() {
                     contact: user.phone,
                 },
                 theme: {
-                    color: "#344B33", // brand-olive-dark
+                    color: "#344B33",
                 },
                 modal: {
                     ondismiss: () => {
@@ -142,7 +131,6 @@ export default function CheckoutPage() {
 
             const rzp = new window.Razorpay(options);
             rzp.open();
-            */
         } catch (err: any) {
             setError(err.message || "An unexpected error occurred");
             setIsProcessing(false);

@@ -55,12 +55,12 @@ type AdminSection = "dashboard" | "categories" | "products" | "staff" | "orders"
 // Shared types
 // ---------------------------------------------------------------------------
 interface Category {
-    id: number;
+    id: string | number;
     name: string;
 }
 
 interface Product {
-    id: number;
+    id: string | number;
     name: string;
     category: string;
     price: number;
@@ -72,17 +72,17 @@ interface Product {
 }
 
 interface StaffMember {
-    id: number;
+    id: string | number;
     name: string;
     email: string;
     phone: string;
-    role: "baker" | "manager" | "admin";
+    role: "baker" | "manager" | "admin" | "accountant" | "delivery";
     created_at?: string;
 }
 
 interface OrderItem {
-    id: number;
-    product_id: number;
+    id: string | number;
+    product_id: string | number;
     quantity: number;
     price_at_time: number;
     product_name: string;
@@ -90,7 +90,7 @@ interface OrderItem {
 }
 
 interface Order {
-    id: number;
+    id: string | number;
     status: string;
     total_price: number;
     created_at: string;
@@ -309,9 +309,9 @@ function PricingView() {
     const [users, setUsers] = useState<any[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
     const [selectedUser, setSelectedUser] = useState<any>(null);
-    const [userPrices, setUserPrices] = useState<Record<number, number>>({});
+    const [userPrices, setUserPrices] = useState<Record<string, number>>({});
     const [isLoading, setIsLoading] = useState(true);
-    const [isSaving, setIsSaving] = useState<number | null>(null);
+    const [isSaving, setIsSaving] = useState<string | number | null>(null);
 
     useEffect(() => {
         loadInitialData();
@@ -330,24 +330,24 @@ function PricingView() {
         setIsLoading(true);
         const result = await getUserPrices(user.id);
         if (result.success) {
-            const priceMap: Record<number, number> = {};
+            const priceMap: Record<string, number> = {};
             (result.prices || []).forEach((p: any) => {
-                priceMap[p.product_id] = p.price;
+                priceMap[String(p.product_id)] = Number(p.price);
             });
             setUserPrices(priceMap);
         }
         setIsLoading(false);
     };
 
-    const handlePriceChange = (productId: number, price: string) => {
+    const handlePriceChange = (productId: string | number, price: string) => {
         const val = parseInt(price) || 0;
-        setUserPrices(prev => ({ ...prev, [productId]: val }));
+        setUserPrices(prev => ({ ...prev, [String(productId)]: val }));
     };
 
-    const savePrice = async (productId: number) => {
+    const savePrice = async (productId: string | number) => {
         if (!selectedUser) return;
         setIsSaving(productId);
-        const price = userPrices[productId] || 0;
+        const price = userPrices[String(productId)] || 0;
         const result = await setUserPrice(selectedUser.id, productId, price);
         if (result.success) {
             // Optional: Show success toast
@@ -454,7 +454,7 @@ function PricingView() {
                                                         <span className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-gold-bright font-black text-xs">₹</span>
                                                         <input
                                                             type="number"
-                                                            value={userPrices[product.id] || ""}
+                                                            value={userPrices[String(product.id)] || ""}
                                                             onChange={(e) => handlePriceChange(product.id, e.target.value)}
                                                             placeholder={product.price.toString()}
                                                             className="w-full bg-white border border-transparent focus:border-brand-gold-bright/30 outline-none rounded-xl py-3 pl-8 pr-4 text-sm font-bold text-brand-olive-dark transition-all shadow-sm"
@@ -465,7 +465,7 @@ function PricingView() {
                                                         disabled={isSaving === product.id}
                                                         className={cn(
                                                             "px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 flex items-center gap-2",
-                                                            userPrices[product.id] && userPrices[product.id] !== product.price
+                                                            userPrices[String(product.id)] && userPrices[String(product.id)] !== product.price
                                                                 ? "bg-brand-olive-dark text-white hover:bg-brand-gold-bright shadow-md"
                                                                 : "bg-white text-gray-400 cursor-default"
                                                         )}
@@ -590,9 +590,9 @@ function ProductsView() {
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
-    const [deletingId, setDeletingId] = useState<number | null>(null);
+    const [deletingId, setDeletingId] = useState<string | number | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
-    const [updatingLimitId, setUpdatingLimitId] = useState<number | null>(null);
+    const [updatingLimitId, setUpdatingLimitId] = useState<string | number | null>(null);
 
     useEffect(() => {
         loadData();
@@ -790,7 +790,7 @@ function CategoriesView() {
         setIsSubmitting(false);
     };
 
-    const [deletingId, setDeletingId] = useState<number | null>(null);
+    const [deletingId, setDeletingId] = useState<string | number | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
 
     const handleDelete = async () => {
@@ -929,7 +929,7 @@ function StaffView() {
         setIsSubmitting(false);
     };
 
-    const [deletingId, setDeletingId] = useState<number | null>(null);
+    const [deletingId, setDeletingId] = useState<string | number | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
 
     const handleDelete = async () => {
@@ -1070,7 +1070,7 @@ function OrdersView() {
         setIsLoading(false);
     };
 
-    const handleStatusUpdate = async (id: number, status: string) => {
+    const handleStatusUpdate = async (id: string | number, status: string) => {
         const result = await updateOrderStatus(id, status);
         if (result.success) loadOrders();
     };

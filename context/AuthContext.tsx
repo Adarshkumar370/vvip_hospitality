@@ -4,7 +4,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from "react
 import { syncUserSession } from "@/app/bakery/actions";
 
 interface User {
-    id: number;
+    id: string | number;
     phone: string;
     name: string;
     email: string;
@@ -29,8 +29,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             try {
                 const userData = JSON.parse(savedUser);
                 setUser(userData);
-                // Sync with server cookie if it's missing
-                syncUserSession(userData);
+                // Sync with server cookie and upgrade old numeric IDs to schema UUIDs.
+                syncUserSession(userData).then((res: any) => {
+                    if (res?.success && res.user) {
+                        setUser(res.user);
+                        localStorage.setItem("vvip_bakery_user", JSON.stringify(res.user));
+                    } else if (res?.error) {
+                        setUser(null);
+                        localStorage.removeItem("vvip_bakery_user");
+                    }
+                });
             } catch (e) {
                 console.error("Failed to parse saved user", e);
             }

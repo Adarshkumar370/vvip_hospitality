@@ -136,7 +136,7 @@ export default function SettingsPage() {
         setTimeout(() => setMessage(null), 3000);
     };
 
-    const handleDeleteAddress = async (id: number) => {
+    const handleDeleteAddress = async (id: string | number) => {
         if (!user || !confirm("Are you sure you want to delete this address?")) return;
         const res = await deleteAddress(id, user.id);
         if (res.success) {
@@ -399,8 +399,8 @@ export default function SettingsPage() {
                                     ) : (
                                         <div className="space-y-6">
                                             {orders.filter((order) => {
-                                                if (orderTab === "pending") return order.status === "pending";
-                                                if (orderTab === "ongoing") return order.status === "preparing" || order.status === "prepared";
+                                                if (orderTab === "pending") return order.payment_status === "pending";
+                                                if (orderTab === "ongoing") return order.payment_status === "paid" && (order.status === "pending" || order.status === "preparing" || order.status === "prepared" || order.status === "in transit");
                                                 if (orderTab === "completed") return order.status === "delivered" || order.status === "cancelled";
                                                 return true;
                                             }).length === 0 ? (
@@ -410,8 +410,8 @@ export default function SettingsPage() {
                                                 </div>
                                             ) : (
                                                 orders.filter((order) => {
-                                                    if (orderTab === "pending") return order.status === "pending";
-                                                    if (orderTab === "ongoing") return order.status === "preparing" || order.status === "prepared";
+                                                    if (orderTab === "pending") return order.payment_status === "pending";
+                                                    if (orderTab === "ongoing") return order.payment_status === "paid" && (order.status === "pending" || order.status === "preparing" || order.status === "prepared" || order.status === "in transit");
                                                     if (orderTab === "completed") return order.status === "delivered" || order.status === "cancelled";
                                                     return true;
                                                 }).map((order) => (

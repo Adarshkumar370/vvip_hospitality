@@ -19,7 +19,7 @@ export const adminSessionOptions: SessionOptions = {
 
 export interface StaffSessionData {
     staff?: {
-        id: number;
+        id: string;
         name: string;
         email: string;
         phone: string;
@@ -41,7 +41,7 @@ export const staffSessionOptions: SessionOptions = {
 };
 export interface UserSessionData {
     user?: {
-        id: number;
+        id: string;
         name: string;
         email: string;
         phone: string;
