@@ -5,7 +5,8 @@ const FIREBASE_JWKS = jose.createRemoteJWKSet(
 );
 
 export async function verifyFirebaseIdToken(idToken: string) {
-    const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+    const projectId = process.env.FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+    if (!projectId) throw new Error("Firebase project ID is not configured on the server");
     const { payload } = await jose.jwtVerify(idToken, FIREBASE_JWKS, {
         issuer: `https://securetoken.google.com/${projectId}`,
         audience: projectId,
