@@ -144,6 +144,8 @@ export default function CheckoutPage() {
 
             const razorpayRes = await createRazorpayOrder(totalPrice, orderRes.orderId);
             if (!razorpayRes.success) throw new Error(razorpayRes.error || "Failed to initialize payment");
+            if (typeof orderRes.orderId !== "string") throw new Error("Invalid order id returned from server");
+            const verifiedOrderId = orderRes.orderId;
 
             const options = {
                 key: razorpayRes.keyId || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
@@ -154,7 +156,7 @@ export default function CheckoutPage() {
                 order_id: razorpayRes.orderId,
                 handler: async (response: RazorpayVerifyResponse) => {
                     const verifyRes = await verifyRazorpayPayment(
-                        orderRes.orderId,
+                        verifiedOrderId,
                         response.razorpay_order_id,
                         response.razorpay_payment_id,
                         response.razorpay_signature
