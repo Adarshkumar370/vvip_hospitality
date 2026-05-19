@@ -1,4 +1,4 @@
-import { getUserSession, getProductsForUser, getCategories } from "@/app/bakery/actions";
+import { getUserSession, getProductsForUser, getCategories, getUserBillingSummary } from "@/app/bakery/actions";
 import { redirect } from "next/navigation";
 import OrderClient from "./OrderClient";
 
@@ -13,9 +13,10 @@ export default async function BakeryOrderPage() {
     }
 
     // 2. Fetch data (cached for 300s / 5 min in actions.ts)
-    const [prodRes, catRes] = await Promise.all([
+    const [prodRes, catRes, billingRes] = await Promise.all([
         getProductsForUser(user.id),
-        getCategories()
+        getCategories(),
+        getUserBillingSummary(user.id),
     ]);
 
     if (!prodRes.success) {
@@ -27,7 +28,9 @@ export default async function BakeryOrderPage() {
     }
 
     const products = prodRes.products || [];
-    const categories = ["All", ...('categories' in catRes ? catRes.categories.map((c: any) => c.name) : [])];
+    const categoryNames =
+        "categories" in catRes ? (catRes.categories as Array<{ name: string }>).map((category) => category.name) : [];
+    const categories = ["All", ...categoryNames];
 
     // 3. Render client component with pre-fetched, cached data
     return (
@@ -35,6 +38,7 @@ export default async function BakeryOrderPage() {
             initialProducts={products} 
             initialCategories={categories} 
             user={user} 
+            billingSummary={billingRes.success ? billingRes.summary : null}
         />
     );
 }

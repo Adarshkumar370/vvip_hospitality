@@ -49,7 +49,7 @@ const LEGACY_TO_DB_ORDER_STATUS: Record<string, OrderStatus> = {
 
 const STAFF_ROLES = ["baker", "manager", "admin", "accountant", "delivery"] as const;
 type StaffRole = typeof STAFF_ROLES[number];
-type StaffDesignation = "accountant" | "baker_chef" | "delivery_person" | "admin";
+type StaffDesignation = "accountant" | "baker_chef" | "delivery_person" | "manager" | "admin";
 
 const staffSchema = z.object({
     name: z.string().min(1).max(100).trim(),
@@ -108,7 +108,142 @@ function toUserView(user: any) {
         email: user.email,
         phone: user.phone || denormalizeMobileNo(user.mobile_no),
         mobile_no: user.mobile_no,
+        payment_type: user.payment_type || "prepaid_user",
+        credit_limit: user.credit_limit === null || user.credit_limit === undefined ? null : Number(user.credit_limit),
+        current_balance: user.current_balance === null || user.current_balance === undefined ? null : Number(user.current_balance),
+        billing_cycle_day: user.billing_cycle_day ?? null,
+        payment_terms_days: user.payment_terms_days ?? null,
+        billing_status: user.billing_status ?? null,
         created_at: user.created_at,
+    };
+}
+
+function getBillingCycleWindow(billingCycleDay: number, cycleLengthDays: number, now = new Date()) {
+    const safeDay = Math.min(Math.max(Math.trunc(billingCycleDay || 1), 1), 28);
+    const safeCycleLength = Math.min(Math.max(Math.trunc(cycleLengthDays || 30), 1), 90);
+    let cycleStart = new Date(now.getFullYear(), now.getMonth(), safeDay, 0, 0, 0, 0);
+
+    if (now < cycleStart) {
+        cycleStart = new Date(cycleStart.getFullYear(), cycleStart.getMonth() - 1, safeDay, 0, 0, 0, 0);
+    }
+
+    let cycleEnd = new Date(cycleStart);
+    cycleEnd.setDate(cycleEnd.getDate() + safeCycleLength);
+
+    while (now >= cycleEnd) {
+        cycleStart = new Date(cycleEnd);
+        cycleEnd = new Date(cycleStart);
+        cycleEnd.setDate(cycleEnd.getDate() + safeCycleLength);
+    }
+
+    return { cycleStart, cycleEnd };
+}
+
+async function getUserBillingSummaryInternal(userId: string) {
+    const [user] = await sql`
+        SELECT
+            u.id,
+            u.first_name,
+            u.last_name,
+            u.email,
+            u.mobile_no,
+            u.payment_type,
+            bp.id AS billing_profile_id,
+            bp.billing_status,
+            bp.credit_limit,
+            bp.current_balance,
+            bp.billing_cycle_day,
+            bp.payment_terms_days,
+            bp.invoice_email,
+            bp.notes
+        FROM app_users u
+        LEFT JOIN user_billing_profiles bp
+            ON bp.user_id = u.id
+        WHERE u.id = ${userId}
+    `;
+
+    if (!user) {
+        return { success: false as const, error: "User not found" };
+    }
+
+    const paymentType = user.payment_type || "prepaid_user";
+    if (paymentType !== "postpaid_user" || !user.billing_profile_id || user.billing_status !== "active") {
+        return {
+            success: true as const,
+            summary: {
+                paymentType,
+                isPostpaid: false,
+                cycle: null,
+                creditLimit: 0,
+                pendingAmount: 0,
+                availableCredit: 0,
+                billingCycleDay: null,
+                paymentTermsDays: null,
+                orders: [],
+            },
+        };
+    }
+
+    const { cycleStart, cycleEnd } = getBillingCycleWindow(
+        Number(user.billing_cycle_day || 1),
+        Number(user.payment_terms_days || 30)
+    );
+
+    const orders = await sql`
+        SELECT
+            o.id,
+            o.order_number,
+            o.order_status,
+            o.total_amount,
+            o.created_at,
+            o.payment_type_snapshot,
+            COALESCE(
+                JSON_AGG(
+                    JSON_BUILD_OBJECT(
+                        'id', oi.id,
+                        'product_id', oi.product_id,
+                        'quantity', oi.quantity,
+                        'price_at_time', oi.unit_price,
+                        'product_name', oi.product_name_snapshot,
+                        'product_image', COALESCE(p.image_url, '/images/bakery/sourdough.png')
+                    ) ORDER BY oi.line_number
+                ) FILTER (WHERE oi.id IS NOT NULL),
+                '[]'
+            ) AS items
+        FROM orders o
+        LEFT JOIN order_items oi ON oi.order_id = o.id
+        LEFT JOIN products p ON p.id = oi.product_id
+        WHERE o.user_id = ${userId}
+          AND o.payment_type_snapshot = 'postpaid_user'
+          AND o.order_status <> 'cancelled'
+          AND o.created_at >= ${cycleStart.toISOString()}
+          AND o.created_at < ${cycleEnd.toISOString()}
+        GROUP BY o.id
+        ORDER BY o.created_at DESC
+    `;
+
+    const orderViews = orders.map(toOrderView);
+    const pendingAmount = orderViews.reduce((sum: number, order: any) => sum + Number(order.total_price || 0), 0);
+    const creditLimit = Number(user.credit_limit || 0);
+
+    return {
+        success: true as const,
+        summary: {
+            paymentType,
+            isPostpaid: true,
+            cycle: {
+                start: cycleStart.toISOString(),
+                end: cycleEnd.toISOString(),
+            },
+            creditLimit,
+            pendingAmount,
+            availableCredit: Math.max(0, creditLimit - pendingAmount),
+            billingCycleDay: Number(user.billing_cycle_day || 1),
+            paymentTermsDays: Number(user.payment_terms_days || 0),
+            invoiceEmail: user.invoice_email || user.email,
+            notes: user.notes || "",
+            orders: orderViews,
+        },
     };
 }
 
@@ -117,7 +252,7 @@ async function findUserFromSessionIdentity(user: { id?: string | number, email?:
 
     if (isUuid(user.id)) {
         const rows = await sql`
-            SELECT id, first_name, last_name, email, mobile_no, created_at
+            SELECT id, first_name, last_name, email, mobile_no, payment_type, created_at
             FROM app_users
             WHERE id = ${user.id}
         `;
@@ -126,7 +261,7 @@ async function findUserFromSessionIdentity(user: { id?: string | number, email?:
 
     if (user.phone) {
         const rows = await sql`
-            SELECT id, first_name, last_name, email, mobile_no, created_at
+            SELECT id, first_name, last_name, email, mobile_no, payment_type, created_at
             FROM app_users
             WHERE mobile_no = ${normalizeMobileNo(user.phone)}
         `;
@@ -135,7 +270,7 @@ async function findUserFromSessionIdentity(user: { id?: string | number, email?:
 
     if (user.email) {
         const rows = await sql`
-            SELECT id, first_name, last_name, email, mobile_no, created_at
+            SELECT id, first_name, last_name, email, mobile_no, payment_type, created_at
             FROM app_users
             WHERE email = ${user.email}
         `;
@@ -149,6 +284,7 @@ function toStaffDesignation(role: string): StaffDesignation {
     if (role === "baker") return "baker_chef";
     if (role === "delivery") return "delivery_person";
     if (role === "accountant") return "accountant";
+    if (role === "manager") return "manager";
     return "admin";
 }
 
@@ -156,6 +292,7 @@ function toStaffRole(designation: string): StaffRole {
     if (designation === "baker_chef") return "baker";
     if (designation === "delivery_person") return "delivery";
     if (designation === "accountant") return "accountant";
+    if (designation === "manager") return "manager";
     return "admin";
 }
 
@@ -187,7 +324,7 @@ function toProductView(product: any) {
         image: product.image || product.image_url || "/images/bakery/sourdough.png",
         description: product.description || product.short_description || product.long_description || "",
         price: Number(product.price),
-        max_daily_limit: product.max_daily_limit === null ? 0 : Number(product.max_daily_limit),
+        max_daily_limit: product.max_daily_limit === null ? 100 : Number(product.max_daily_limit),
         is_available: product.status !== "hidden",
     };
 }
@@ -219,6 +356,9 @@ function toOrderView(order: any) {
         status: toLegacyOrderStatus(order.order_status || order.status),
         total_price: Number(order.total_amount ?? order.total_price ?? 0),
         payment_status: order.payment_status || "pending",
+        payment_received_at: order.payment_received_at || null,
+        invoice_number: order.invoice_number || null,
+        invoice_pdf_url: order.invoice_pdf_url || null,
         items: (order.items || []).map((item: any) => ({
             ...item,
             quantity: Number(item.quantity),
@@ -255,6 +395,38 @@ function defaultPermissionCodesForRole(role: StaffRole) {
     if (role === "accountant") return ["manage_payments", "issue_invoice", "issue_receipt", "view_reports"];
     if (role === "manager") return ["place_order_on_behalf", "assign_work_orders", "complete_work_orders", "mark_order_confirmed", "mark_order_preparing", "mark_order_ready", "mark_order_out_for_delivery", "mark_order_completed", "cancel_order", "view_reports"];
     return [];
+}
+
+function getStaffMutationErrorMessage(err: unknown, fallback: string) {
+    const message = err instanceof Error ? err.message : "";
+
+    if (message.includes("ux_staff_members_email")) {
+        return "Failed to add staff: email is already in use.";
+    }
+
+    if (message.includes("ux_staff_members_mobile_no")) {
+        return "Failed to add staff: phone number is already in use.";
+    }
+
+    if (message.includes("invalid input value for enum staff_designation")) {
+        return "Failed to add staff: the database does not yet allow the selected role. Run the staff designation migration first.";
+    }
+
+    return fallback;
+}
+
+function getOrderStatusErrorMessage(err: unknown) {
+    const message = err instanceof Error ? err.message : "";
+
+    if (message.includes("staff member does not have permission")) {
+        return message;
+    }
+
+    if (message.includes("assigned staff designation does not match work order designation")) {
+        return "Failed to update status: the staff designation does not match the assigned work order.";
+    }
+
+    return "Failed to update status";
 }
 
 async function grantDefaultStaffPermissions(db: any, staffId: string, role: StaffRole) {
@@ -380,7 +552,7 @@ export async function checkUser(phone: string) {
     try {
         const mobileNo = normalizeMobileNo(parsed.data);
         const users = await sql`
-            SELECT id, first_name, last_name, email, mobile_no, created_at
+            SELECT id, first_name, last_name, email, mobile_no, payment_type, created_at
             FROM app_users
             WHERE mobile_no = ${mobileNo}
         `;
@@ -422,7 +594,7 @@ export async function registerUser(phone: string, name: string, email: string) {
                 SET mobile_verified_at = COALESCE(mobile_verified_at, now()),
                     email_verified_at = COALESCE(email_verified_at, now())
                 WHERE id = ${upserted.id}
-                RETURNING id, first_name, last_name, email, mobile_no, created_at
+                RETURNING id, first_name, last_name, email, mobile_no, payment_type, created_at
             `;
             return toUserView(verified);
         });
@@ -573,6 +745,58 @@ export async function getProducts() {
     } catch (err) {
         console.error("Failed to fetch products:", err);
         return { success: false as const, error: "Database error" };
+    }
+}
+
+export async function updateProductDailyLimitForStaff(productId: string, maxDailyLimit: number) {
+    if (!isUuid(productId)) {
+        return { success: false as const, error: "Invalid product ID" };
+    }
+
+    if (!Number.isFinite(maxDailyLimit) || maxDailyLimit < 0) {
+        return { success: false as const, error: "Daily limit must be a non-negative number" };
+    }
+
+    try {
+        const session = await getIronSession<StaffSessionData>(await cookies(), staffSessionOptions);
+        const sessionStaff = session.staff;
+
+        if (!sessionStaff?.id || !isUuid(sessionStaff.id)) {
+            return { success: false as const, error: "Unauthorized. Please sign in again." };
+        }
+
+        const [staff] = await sql`
+            SELECT id, designation, status
+            FROM staff_members
+            WHERE id = ${sessionStaff.id}
+              AND status = 'active'
+        `;
+
+        if (!staff) {
+            return { success: false as const, error: "Staff session is no longer valid." };
+        }
+
+        const role = toStaffRole(staff.designation);
+        if (role !== "manager" && role !== "admin") {
+            return { success: false as const, error: "Only manager or owner can update daily limits." };
+        }
+
+        const [updated] = await sql`
+            UPDATE products
+            SET max_daily_limit = ${Math.trunc(maxDailyLimit)}
+            WHERE id = ${productId}
+            RETURNING id, max_daily_limit
+        `;
+
+        if (!updated) {
+            return { success: false as const, error: "Product not found" };
+        }
+
+        revalidatePath("/bakery", "layout");
+        return { success: true as const, productId: updated.id, maxDailyLimit: Number(updated.max_daily_limit) };
+    } catch (err) {
+        console.error("Failed to update product daily limit:", err);
+        return { success: false as const, error: "Failed to update daily limit" };
     }
 }
 
@@ -863,7 +1087,10 @@ export async function addStaff(staffMember: { name: string, email: string, phone
         return { success: true as const, staff: createdStaff };
     } catch (err) {
         console.error("Failed to add staff member:", err);
-        return { success: false as const, error: "Failed to add staff (email/phone might already be in use)" };
+        return {
+            success: false as const,
+            error: getStaffMutationErrorMessage(err, "Failed to add staff due to a database error."),
+        };
     }
 }
 
@@ -907,7 +1134,7 @@ export async function updateStaff(id: string | number, staffMember: { name: stri
         return { success: true, staff: updatedStaff };
     } catch (err) {
         console.error("Failed to update staff:", err);
-        return { success: false, error: "Failed to update staff" };
+        return { success: false, error: getStaffMutationErrorMessage(err, "Failed to update staff") };
     }
 }
 
@@ -953,6 +1180,9 @@ export async function getOrders() {
                 o.order_status,
                 o.total_amount,
                 o.created_at,
+                inv.invoice_number,
+                inv.invoice_pdf_url,
+                pay.payment_received_at,
                 o.placed_by,
                 o.placed_by_staff_id,
                 CASE
@@ -998,9 +1228,24 @@ export async function getOrders() {
                     '[]'
                 ) AS items
             FROM orders o
+            LEFT JOIN LATERAL (
+                SELECT invoice_number, invoice_pdf_url
+                FROM invoices
+                WHERE order_id = o.id
+                ORDER BY created_at DESC
+                LIMIT 1
+            ) inv ON true
+            LEFT JOIN LATERAL (
+                SELECT created_at AS payment_received_at
+                FROM payments
+                WHERE order_id = o.id
+                  AND payment_status = 'succeeded'
+                ORDER BY created_at DESC
+                LIMIT 1
+            ) pay ON true
             LEFT JOIN order_items oi ON oi.order_id = o.id
             LEFT JOIN products    p  ON p.id = oi.product_id
-            GROUP BY o.id
+            GROUP BY o.id, inv.invoice_number, inv.invoice_pdf_url, pay.payment_received_at
             ORDER BY o.created_at DESC
         `;
         return { success: true as const, orders: orders.map(toOrderView) };
@@ -1143,7 +1388,7 @@ export async function updateOrderStatus(orderId: string | number, status: string
         return { success: true as const, order: updated };
     } catch (err) {
         console.error("Failed to update status:", err);
-        return { success: false as const, error: "Failed to update status" };
+        return { success: false as const, error: getOrderStatusErrorMessage(err) };
     }
 }
 
@@ -1199,6 +1444,36 @@ export async function getStaffSession() {
     return session.staff;
 }
 
+async function getAuthenticatedStaffForPermission(permissionCode: string) {
+    const session = await getIronSession<StaffSessionData>(await cookies(), staffSessionOptions);
+    const sessionStaff = session.staff;
+
+    if (!sessionStaff?.id || !isUuid(sessionStaff.id)) {
+        return { success: false as const, error: "Unauthorized. Please sign in again." };
+    }
+
+    const [staff] = await sql`
+        SELECT id, staff_name, email, mobile_no, designation, status
+        FROM staff_members
+        WHERE id = ${sessionStaff.id}
+          AND status = 'active'
+    `;
+
+    if (!staff) {
+        return { success: false as const, error: "Staff session is no longer valid." };
+    }
+
+    const [hasPermission] = await sql`
+        SELECT staff_has_permission(${sessionStaff.id}::uuid, ${permissionCode}::varchar) AS allowed
+    `;
+
+    if (!hasPermission?.allowed) {
+        return { success: false as const, error: `Missing permission: ${permissionCode}` };
+    }
+
+    return { success: true as const, staff: toStaffView(staff) };
+}
+
 export async function logoutStaff() {
     const session = await getIronSession<StaffSessionData>(await cookies(), staffSessionOptions);
     session.destroy();
@@ -1208,6 +1483,46 @@ export async function logoutStaff() {
     adminSession.destroy();
 
     return { success: true };
+}
+
+export async function retryStaffInvoiceGeneration(orderId: string) {
+    if (!isUuid(orderId)) {
+        return { success: false as const, error: "Invalid order ID" };
+    }
+
+    try {
+        const auth = await getAuthenticatedStaffForPermission("issue_invoice");
+        if (!auth.success) {
+            return auth;
+        }
+
+        const [order] = await sql`
+            SELECT id FROM orders
+            WHERE id = ${orderId}
+        `;
+        if (!order) return { success: false as const, error: "Order not found" };
+
+        const [payment] = await sql`
+            SELECT id FROM payments
+            WHERE order_id = ${orderId}
+              AND payment_status = 'succeeded'
+            LIMIT 1
+        `;
+        if (!payment) {
+            return { success: false as const, error: "No successful payment found for this order" };
+        }
+
+        const { generateAndUploadInvoicePdfForOrder } = await import("@/lib/invoice-service");
+        const invoice = await generateAndUploadInvoicePdfForOrder(sql, orderId);
+        return {
+            success: true as const,
+            invoicePdfUrl: invoice.invoicePdfUrl,
+            invoiceNumber: invoice.invoiceNumber,
+        };
+    } catch (err: any) {
+        console.error("Failed to generate invoice from staff portal:", err);
+        return { success: false as const, error: err?.message || "Invoice generation failed" };
+    }
 }
 
 // --- USER SETTINGS & ADDRESSES ---
@@ -1664,6 +1979,19 @@ export async function placeOrder(userId: string | number, items: { id: string | 
         if (!productsRes.success) throw new Error("Could not fetch prices");
 
         const availableProducts = productsRes.products || [];
+        const [userProfile] = await sql`
+            SELECT
+                u.payment_type,
+                bp.billing_status,
+                bp.credit_limit,
+                bp.billing_cycle_day,
+                bp.payment_terms_days
+            FROM app_users u
+            LEFT JOIN user_billing_profiles bp
+                ON bp.user_id = u.id
+            WHERE u.id = ${validData.userId}
+        `;
+        const isPostpaidUser = userProfile?.payment_type === "postpaid_user";
         let calculatedTotal = 0;
         const finalItems: { product_id: string | number, quantity: number }[] = [];
 
@@ -1706,6 +2034,25 @@ export async function placeOrder(userId: string | number, items: { id: string | 
             console.warn("Frontend total mismatch", { frontendTotal, calculatedTotal });
         }
 
+        if (isPostpaidUser) {
+            if (userProfile?.billing_status !== "active") {
+                return { success: false, error: "Postpaid billing is not active for this account." };
+            }
+
+            const billingSummary = await getUserBillingSummaryInternal(validData.userId);
+            if (!billingSummary.success) {
+                return { success: false, error: billingSummary.error || "Could not verify billing profile" };
+            }
+
+            const availableCredit = Number(billingSummary.summary.availableCredit || 0);
+            if (calculatedTotal > availableCredit) {
+                return {
+                    success: false,
+                    error: `Postpaid limit exceeded. Available balance is Rs. ${availableCredit.toFixed(2)}.`,
+                };
+            }
+        }
+
         // 4. Execute Transaction
         return await sql.begin(async (tx: any) => {
             const [order] = await tx`
@@ -1713,7 +2060,14 @@ export async function placeOrder(userId: string | number, items: { id: string | 
                     user_id, delivery_address_id, fulfillment_type,
                     order_source, placed_by, order_status
                 )
-                VALUES (${validData.userId}, ${validData.addressId}, 'delivery', 'web', 'self', 'payment_pending')
+                VALUES (
+                    ${validData.userId},
+                    ${validData.addressId},
+                    'delivery',
+                    'web',
+                    'self',
+                    ${isPostpaidUser ? 'placed' : 'payment_pending'}
+                )
                 RETURNING id
             `;
 
@@ -1730,7 +2084,12 @@ export async function placeOrder(userId: string | number, items: { id: string | 
                 WHERE id = ${order.id}
             `;
 
-            return { success: true, orderId: savedOrder.id, total: Number(savedOrder.total_amount) };
+            return {
+                success: true,
+                orderId: savedOrder.id,
+                total: Number(savedOrder.total_amount),
+                paymentMode: isPostpaidUser ? "postpaid" : "prepaid",
+            };
         });
     } catch (err) {
         console.error("Failed to place order:", err);
@@ -1743,14 +2102,106 @@ export async function placeOrder(userId: string | number, items: { id: string | 
 export async function getUsers() {
     try {
         const users = await sql`
-            SELECT id, first_name, last_name, email, mobile_no, created_at
-            FROM app_users
-            ORDER BY created_at DESC
+            SELECT
+                u.id,
+                u.first_name,
+                u.last_name,
+                u.email,
+                u.mobile_no,
+                u.payment_type,
+                u.created_at,
+                bp.billing_status,
+                bp.credit_limit,
+                bp.current_balance,
+                bp.billing_cycle_day,
+                bp.payment_terms_days
+            FROM app_users u
+            LEFT JOIN user_billing_profiles bp
+                ON bp.user_id = u.id
+            ORDER BY u.created_at DESC
         `;
         return { success: true, users: users.map(toUserView) };
     } catch (err) {
         console.error("Failed to fetch users:", err);
         return { success: false, error: "Database error" };
+    }
+}
+
+export async function getUserBillingSummary(userId: string | number) {
+    if (!isUuid(userId)) {
+        return { success: false as const, error: "Session user is no longer valid. Please sign in again." };
+    }
+
+    try {
+        return await getUserBillingSummaryInternal(userId);
+    } catch (err) {
+        console.error("Failed to fetch user billing summary:", err);
+        return { success: false as const, error: "Database error" };
+    }
+}
+
+export async function updateUserBillingSettings(input: {
+    userId: string;
+    paymentType: "prepaid_user" | "postpaid_user";
+    creditLimit: number;
+    billingCycleDay: number;
+    paymentTermsDays: number;
+    invoiceEmail?: string;
+    notes?: string;
+}) {
+    if (!isUuid(input.userId)) {
+        return { success: false as const, error: "Invalid user ID" };
+    }
+
+    const paymentType = input.paymentType;
+    const creditLimit = Number(input.creditLimit || 0);
+    const billingCycleDay = Math.min(28, Math.max(1, Math.trunc(input.billingCycleDay || 1)));
+    const paymentTermsDays = Math.min(90, Math.max(0, Math.trunc(input.paymentTermsDays || 0)));
+
+    try {
+        const updated = await sql.begin(async (tx: any) => {
+            const [user] = await tx`
+                UPDATE app_users
+                SET payment_type = ${paymentType}
+                WHERE id = ${input.userId}
+                RETURNING id
+            `;
+
+            if (!user) {
+                throw new Error("User not found");
+            }
+
+            if (paymentType === "postpaid_user") {
+                await tx`
+                    INSERT INTO user_billing_profiles (
+                        user_id, billing_status, credit_limit, billing_cycle_day, payment_terms_days, invoice_email, notes
+                    )
+                    VALUES (
+                        ${input.userId}, 'active', ${creditLimit}, ${billingCycleDay}, ${paymentTermsDays},
+                        ${input.invoiceEmail || null}, ${input.notes || null}
+                    )
+                    ON CONFLICT (user_id)
+                    DO UPDATE SET
+                        billing_status = 'active',
+                        credit_limit = EXCLUDED.credit_limit,
+                        billing_cycle_day = EXCLUDED.billing_cycle_day,
+                        payment_terms_days = EXCLUDED.payment_terms_days,
+                        invoice_email = EXCLUDED.invoice_email,
+                        notes = EXCLUDED.notes
+                `;
+            } else {
+                await tx`
+                    UPDATE user_billing_profiles
+                    SET billing_status = 'inactive'
+                    WHERE user_id = ${input.userId}
+                `;
+            }
+        });
+
+        return { success: true as const, updated };
+    } catch (err: any) {
+        console.error("Failed to update user billing settings:", err);
+        return { success: false as const, error: err?.message || "Failed to update billing settings" };
     }
 }
 

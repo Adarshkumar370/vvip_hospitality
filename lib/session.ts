@@ -45,6 +45,7 @@ export interface UserSessionData {
         name: string;
         email: string;
         phone: string;
+        payment_type?: string;
     }
 }
 

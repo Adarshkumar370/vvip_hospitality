@@ -8,6 +8,7 @@ interface User {
     phone: string;
     name: string;
     email: string;
+    payment_type?: string;
 }
 
 interface AuthContextType {

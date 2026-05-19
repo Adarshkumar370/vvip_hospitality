@@ -46,7 +46,8 @@ import {
     logoutAdmin,
     getUsers,
     getUserPrices,
-    setUserPrice
+    setUserPrice,
+    updateUserBillingSettings
 } from "@/app/bakery/actions";
 
 type AdminSection = "dashboard" | "categories" | "products" | "staff" | "orders" | "users" | "pricing";
@@ -243,6 +244,17 @@ export default function AdminPageClient() {
 function UsersView() {
     const [users, setUsers] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [editingUserId, setEditingUserId] = useState<string | number | null>(null);
+    const [isSavingBilling, setIsSavingBilling] = useState(false);
+    const [billingDraft, setBillingDraft] = useState({
+        paymentType: "prepaid_user",
+        creditLimit: 0,
+        billingCycleDay: 1,
+        billingDate: "",
+        paymentTermsDays: 30,
+        invoiceEmail: "",
+        notes: "",
+    });
 
     useEffect(() => {
         loadUsers();
@@ -255,6 +267,56 @@ function UsersView() {
         setIsLoading(false);
     };
 
+    const startEditing = (user: any) => {
+        const defaultBillingDate = new Date();
+        defaultBillingDate.setDate(Number(user.billing_cycle_day || 1));
+        setEditingUserId(user.id);
+        setBillingDraft({
+            paymentType: user.payment_type || "prepaid_user",
+            creditLimit: Number(user.credit_limit || 0),
+            billingCycleDay: Number(user.billing_cycle_day || 1),
+            billingDate: defaultBillingDate.toISOString().slice(0, 10),
+            paymentTermsDays: Number(user.payment_terms_days || 30),
+            invoiceEmail: user.email || "",
+            notes: "",
+        });
+    };
+
+    const saveBilling = async () => {
+        if (!editingUserId) return;
+        setIsSavingBilling(true);
+        const result = await updateUserBillingSettings({
+            userId: String(editingUserId),
+            paymentType: billingDraft.paymentType as "prepaid_user" | "postpaid_user",
+            creditLimit: billingDraft.creditLimit,
+            billingCycleDay: billingDraft.billingCycleDay,
+            paymentTermsDays: billingDraft.paymentTermsDays,
+            invoiceEmail: billingDraft.invoiceEmail,
+            notes: billingDraft.notes,
+        });
+        if (!result.success) {
+            alert(result.error);
+            setIsSavingBilling(false);
+            return;
+        }
+        await loadUsers();
+        setEditingUserId(null);
+        setIsSavingBilling(false);
+    };
+
+    const formatCurrency = (value: number | null | undefined) =>
+        `Rs. ${Number(value || 0).toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+
+    const formatBillingDate = (billingCycleDay: number | null | undefined) => {
+        const date = new Date();
+        date.setDate(Number(billingCycleDay || 1));
+        return date.toLocaleDateString("en-IN", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+        });
+    };
+
     return (
         <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -263,39 +325,191 @@ function UsersView() {
             className="space-y-12"
         >
             <div>
-                <div className="flex items-center gap-3 text-brand-gold-bright font-black uppercase tracking-[0.2em] text-xs mb-3">
+                <div className="mb-3 flex items-center gap-3 text-xs font-black uppercase tracking-[0.2em] text-brand-gold-bright">
                     <Users2 size={16} />
                     User Directory
                 </div>
-                <h1 className="text-5xl font-serif font-black text-brand-olive-dark tracking-tighter">Registered Users</h1>
+                <h1 className="text-5xl font-serif font-black tracking-tighter text-brand-olive-dark">Registered Users</h1>
             </div>
 
-            <div className="bg-white rounded-[2.5rem] shadow-premium p-10 border border-white">
-                <h3 className="text-2xl font-serif font-black text-brand-olive-dark mb-8">Active Users ({users.length})</h3>
+            <div className="rounded-[2.5rem] border border-white bg-white p-10 shadow-premium">
+                <h3 className="mb-8 text-2xl font-serif font-black text-brand-olive-dark">Active Users ({users.length})</h3>
                 {isLoading ? (
-                    <div className="py-20 flex flex-col items-center gap-4">
+                    <div className="flex flex-col items-center gap-4 py-20">
                         <Loader2 className="animate-spin text-brand-gold-bright" size={40} />
                         <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Loading Directory...</p>
                     </div>
                 ) : users.length === 0 ? (
-                    <div className="py-20 text-center text-gray-400 font-serif italic">No users registered yet.</div>
+                    <div className="py-20 text-center font-serif italic text-gray-400">No users registered yet.</div>
                 ) : (
-                    <div className="space-y-4">
+                    <div className="space-y-5">
                         {users.map((user) => (
-                            <div key={user.id} className="flex items-center justify-between p-6 bg-brand-soft-gray/50 rounded-2xl border border-transparent hover:border-brand-gold-bright/20 transition-all">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-brand-olive-dark shadow-sm">
-                                        <UserIcon size={24} />
+                            <div key={user.id} className="rounded-[2rem] border border-brand-olive-dark/10 bg-brand-soft-gray/40 p-6 shadow-sm">
+                                <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+                                    <div className="flex items-start gap-4">
+                                        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white text-brand-olive-dark shadow-sm">
+                                            <UserIcon size={24} />
+                                        </div>
+                                        <div className="space-y-3">
+                                            <div>
+                                                <p className="font-black text-brand-olive-dark">{user.name}</p>
+                                                <p className="text-xs font-bold text-brand-gold-bright">{user.email} • {user.phone}</p>
+                                            </div>
+
+                                            <div className="flex flex-wrap gap-2">
+                                                <span
+                                                    className={cn(
+                                                        "rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest",
+                                                        user.payment_type === "postpaid_user" ? "bg-brand-olive-dark text-white" : "bg-white text-brand-olive-dark"
+                                                    )}
+                                                >
+                                                    {user.payment_type === "postpaid_user" ? "Postpaid" : "Prepaid"}
+                                                </span>
+                                                {user.payment_type === "postpaid_user" && (
+                                                    <span
+                                                        className={cn(
+                                                            "rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest",
+                                                            user.billing_status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
+                                                        )}
+                                                    >
+                                                        {user.billing_status === "active" ? "Billing Active" : "Billing Inactive"}
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            <div className="grid grid-cols-1 gap-3 text-xs font-bold text-brand-olive-dark/75 sm:grid-cols-3">
+                                                <div className="rounded-2xl bg-white px-4 py-3">
+                                                    <p className="mb-1 text-[10px] uppercase tracking-widest text-gray-400">Max Amount</p>
+                                                    <p>{formatCurrency(user.credit_limit)}</p>
+                                                </div>
+                                                <div className="rounded-2xl bg-white px-4 py-3">
+                                                    <p className="mb-1 text-[10px] uppercase tracking-widest text-gray-400">Bill Date</p>
+                                                    <p>{formatBillingDate(user.billing_cycle_day)}</p>
+                                                </div>
+                                                <div className="rounded-2xl bg-white px-4 py-3">
+                                                    <p className="mb-1 text-[10px] uppercase tracking-widest text-gray-400">Billing Cycle</p>
+                                                    <p>{user.payment_terms_days || 30} days</p>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <p className="font-black text-brand-olive-dark">{user.name}</p>
-                                        <p className="text-xs text-brand-gold-bright font-bold">{user.email} • {user.phone}</p>
+
+                                    <div className="flex flex-col items-start gap-4 xl:items-end">
+                                        <div className="text-left xl:text-right">
+                                            <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Joined</p>
+                                            <p className="text-xs font-bold text-brand-olive-dark">{new Date(user.created_at).toLocaleDateString()}</p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => startEditing(user)}
+                                            className="rounded-2xl bg-brand-olive-dark px-5 py-3 text-xs font-black uppercase tracking-widest text-white transition-all hover:bg-brand-gold-bright hover:text-brand-olive-dark"
+                                        >
+                                            {editingUserId === user.id ? "Editing Billing" : "Set Billing"}
+                                        </button>
                                     </div>
                                 </div>
-                                <div className="text-right">
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Joined</p>
-                                    <p className="text-xs font-bold text-brand-olive-dark">{new Date(user.created_at).toLocaleDateString()}</p>
-                                </div>
+
+                                {editingUserId === user.id && (
+                                    <div className="mt-6 rounded-[2rem] border border-brand-gold-bright/20 bg-white p-6">
+                                        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                                            <label className="space-y-2">
+                                                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">User Type</span>
+                                                <select
+                                                    value={billingDraft.paymentType}
+                                                    onChange={(e) => setBillingDraft((prev) => ({ ...prev, paymentType: e.target.value }))}
+                                                    className="w-full rounded-2xl border border-brand-olive-dark/10 bg-brand-soft-gray/40 px-4 py-3 text-sm font-bold text-brand-olive-dark outline-none focus:border-brand-gold-bright"
+                                                >
+                                                    <option value="prepaid_user">Prepaid</option>
+                                                    <option value="postpaid_user">Postpaid</option>
+                                                </select>
+                                            </label>
+
+                                            <label className="space-y-2">
+                                                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Invoice Email</span>
+                                                <input
+                                                    type="email"
+                                                    value={billingDraft.invoiceEmail}
+                                                    onChange={(e) => setBillingDraft((prev) => ({ ...prev, invoiceEmail: e.target.value }))}
+                                                    className="w-full rounded-2xl border border-brand-olive-dark/10 bg-brand-soft-gray/40 px-4 py-3 text-sm font-bold text-brand-olive-dark outline-none focus:border-brand-gold-bright"
+                                                />
+                                            </label>
+                                        </div>
+
+                                        {billingDraft.paymentType === "postpaid_user" && (
+                                            <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
+                                                <label className="space-y-2">
+                                                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Max Amount</span>
+                                                    <input
+                                                        type="number"
+                                                        min={0}
+                                                        value={billingDraft.creditLimit}
+                                                        onChange={(e) => setBillingDraft((prev) => ({ ...prev, creditLimit: Number(e.target.value || 0) }))}
+                                                        className="w-full rounded-2xl border border-brand-olive-dark/10 bg-brand-soft-gray/40 px-4 py-3 text-sm font-bold text-brand-olive-dark outline-none focus:border-brand-gold-bright"
+                                                    />
+                                                </label>
+
+                                                <label className="space-y-2">
+                                                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Bill Date</span>
+                                                    <input
+                                                        type="date"
+                                                        value={billingDraft.billingDate}
+                                                        onChange={(e) => {
+                                                            const selectedDate = e.target.value;
+                                                            const selectedDay = selectedDate ? new Date(selectedDate).getDate() : 1;
+                                                            setBillingDraft((prev) => ({
+                                                                ...prev,
+                                                                billingDate: selectedDate,
+                                                                billingCycleDay: selectedDay,
+                                                            }));
+                                                        }}
+                                                        className="w-full rounded-2xl border border-brand-olive-dark/10 bg-brand-soft-gray/40 px-4 py-3 text-sm font-bold text-brand-olive-dark outline-none focus:border-brand-gold-bright"
+                                                    />
+                                                </label>
+
+                                                <label className="space-y-2">
+                                                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Billing Cycle Days</span>
+                                                    <input
+                                                        type="number"
+                                                        min={1}
+                                                        max={90}
+                                                        value={billingDraft.paymentTermsDays}
+                                                        onChange={(e) => setBillingDraft((prev) => ({ ...prev, paymentTermsDays: Number(e.target.value || 30) }))}
+                                                        className="w-full rounded-2xl border border-brand-olive-dark/10 bg-brand-soft-gray/40 px-4 py-3 text-sm font-bold text-brand-olive-dark outline-none focus:border-brand-gold-bright"
+                                                    />
+                                                </label>
+                                            </div>
+                                        )}
+
+                                        <label className="mt-4 block space-y-2">
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Notes</span>
+                                            <textarea
+                                                rows={3}
+                                                value={billingDraft.notes}
+                                                onChange={(e) => setBillingDraft((prev) => ({ ...prev, notes: e.target.value }))}
+                                                className="w-full rounded-2xl border border-brand-olive-dark/10 bg-brand-soft-gray/40 px-4 py-3 text-sm font-bold text-brand-olive-dark outline-none focus:border-brand-gold-bright"
+                                                placeholder="Optional internal notes"
+                                            />
+                                        </label>
+
+                                        <div className="mt-5 flex flex-wrap gap-3">
+                                            <button
+                                                type="button"
+                                                onClick={saveBilling}
+                                                disabled={isSavingBilling}
+                                                className="rounded-2xl bg-brand-olive-dark px-5 py-3 text-xs font-black uppercase tracking-widest text-white transition-all hover:bg-brand-gold-bright hover:text-brand-olive-dark disabled:cursor-not-allowed disabled:bg-gray-300"
+                                            >
+                                                {isSavingBilling ? "Saving..." : "Save Billing Settings"}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setEditingUserId(null)}
+                                                className="rounded-2xl border border-brand-olive-dark/10 px-5 py-3 text-xs font-black uppercase tracking-widest text-brand-olive-dark transition-all hover:border-brand-gold-bright hover:text-brand-gold-bright"
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         ))}
                     </div>
@@ -304,7 +518,6 @@ function UsersView() {
         </motion.div>
     );
 }
-
 function PricingView() {
     const [users, setUsers] = useState<any[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
@@ -446,12 +659,12 @@ function PricingView() {
                                                     </div>
                                                     <div>
                                                         <p className="text-sm font-black text-brand-olive-dark">{product.name}</p>
-                                                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Base Price: ₹{product.price} {product.unit}</p>
+                                                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Base Price: â‚¹{product.price} {product.unit}</p>
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-4">
                                                     <div className="relative w-32">
-                                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-gold-bright font-black text-xs">₹</span>
+                                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-gold-bright font-black text-xs">â‚¹</span>
                                                         <input
                                                             type="number"
                                                             value={userPrices[String(product.id)] || ""}
@@ -1025,7 +1238,7 @@ function StaffView() {
                                         <h4 className="font-black text-brand-olive-dark">{member.name}</h4>
                                         <div className="flex gap-4 text-[10px] text-gray-400 font-bold uppercase tracking-widest">
                                             <span>{member.role}</span>
-                                            <span>•</span>
+                                            <span>â€¢</span>
                                             <span>{member.phone}</span>
                                         </div>
                                     </div>
@@ -1165,7 +1378,7 @@ function OrdersView() {
                                                     </div>
                                                     <div className="flex-1">
                                                         <p className="font-black text-brand-olive-dark text-sm">{item.product_name}</p>
-                                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Qty: {item.quantity} × ₹{item.price_at_time}</p>
+                                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Qty: {item.quantity} Ã— â‚¹{item.price_at_time}</p>
                                                     </div>
                                                 </div>
                                             ))}
@@ -1178,7 +1391,7 @@ function OrdersView() {
                                             </div>
                                             <div className="pt-4 border-t border-brand-olive-dark/10">
                                                 <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Total Amount</p>
-                                                <p className="text-2xl font-black text-brand-gold-bright">₹{order.total_price}</p>
+                                                <p className="text-2xl font-black text-brand-gold-bright">â‚¹{order.total_price}</p>
                                             </div>
                                         </div>
                                     </div>
@@ -1310,7 +1523,7 @@ function EditProductModal({ product, categories, onClose, onSave, isSubmitting }
                                 />
                             </div>
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-4">Price (₹)</label>
+                                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-4">Price (â‚¹)</label>
                                 <input
                                     required
                                     type="number"
@@ -1491,7 +1704,7 @@ function AddProductModal({ categories, onClose, onAdd, isSubmitting }: AddProduc
                                 />
                             </div>
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-4">Price (₹)</label>
+                                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-4">Price (â‚¹)</label>
                                 <input
                                     required
                                     type="number"
@@ -1597,7 +1810,7 @@ function ProductRow({ product, onEdit, onDelete, onLimitUpdate, isUpdating }: {
                 </div>
                 <div className="flex-1">
                     <p className="text-lg font-black text-brand-olive-dark">{product.name}</p>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-brand-gold-bright">{product.category} • ₹{product.price} {product.unit}</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-brand-gold-bright">{product.category} â€¢ â‚¹{product.price} {product.unit}</p>
                     {product.description && <p className="text-xs text-gray-400 font-medium line-clamp-1 mt-1">{product.description}</p>}
                 </div>
             </div>
@@ -1809,3 +2022,4 @@ function ConfirmDeleteModal({ isOpen, message, isLoading, onConfirm, onCancel }:
         </div>
     );
 }
+
