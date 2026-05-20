@@ -13,7 +13,7 @@ export interface CartItem {
 
 interface CartContextType {
     cart: CartItem[];
-    addToCart: (item: Omit<CartItem, "quantity">) => void;
+    addToCart: (item: Omit<CartItem, "quantity">, quantity?: number) => void;
     removeFromCart: (id: string | number) => void;
     updateQuantity: (id: string | number, quantity: number) => void;
     clearCart: () => void;
@@ -24,34 +24,35 @@ interface CartContextType {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: ReactNode }) {
-    const [cart, setCart] = useState<CartItem[]>([]);
+    const [cart, setCart] = useState<CartItem[]>(() => {
+        if (typeof window === "undefined") return [];
 
-    // Load cart from localStorage
-    useEffect(() => {
         const savedCart = localStorage.getItem("vvip_bakery_cart");
-        if (savedCart) {
-            try {
-                setCart(JSON.parse(savedCart));
-            } catch (e) {
-                console.error("Failed to parse saved cart", e);
-            }
+        if (!savedCart) return [];
+
+        try {
+            return JSON.parse(savedCart);
+        } catch (e) {
+            console.error("Failed to parse saved cart", e);
+            return [];
         }
-    }, []);
+    });
 
     // Save cart to localStorage
     useEffect(() => {
         localStorage.setItem("vvip_bakery_cart", JSON.stringify(cart));
     }, [cart]);
 
-    const addToCart = (item: Omit<CartItem, "quantity">) => {
+    const addToCart = (item: Omit<CartItem, "quantity">, quantity = 1) => {
+        const normalizedQuantity = Math.max(1, Math.floor(quantity));
         setCart((prevCart) => {
             const existingItem = prevCart.find((i) => i.id === item.id);
             if (existingItem) {
                 return prevCart.map((i) =>
-                    i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i
+                    i.id === item.id ? { ...i, quantity: i.quantity + normalizedQuantity } : i
                 );
             }
-            return [...prevCart, { ...item, quantity: 1 }];
+            return [...prevCart, { ...item, quantity: normalizedQuantity }];
         });
     };
 

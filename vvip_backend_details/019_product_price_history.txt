@@ -1,0 +1,116 @@
+-- Immutable price history for products.
+-- This gives a redundant audit trail for price/unit changes.
+
+CREATE TABLE IF NOT EXISTS product_price_history (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    product_id uuid NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    old_price numeric(12, 2),
+    new_price numeric(12, 2) NOT NULL,
+    old_unit_id uuid REFERENCES measurement_units(id) ON DELETE RESTRICT,
+    new_unit_id uuid NOT NULL REFERENCES measurement_units(id) ON DELETE RESTRICT,
+    reason text,
+    changed_by_actor_type varchar(30) NOT NULL DEFAULT 'system',
+    changed_by_actor_id uuid,
+    request_id uuid,
+    created_at timestamptz NOT NULL DEFAULT now(),
+
+    CONSTRAINT chk_product_price_history_new_price
+        CHECK (new_price >= 0),
+    CONSTRAINT chk_product_price_history_old_price
+        CHECK (old_price IS NULL OR old_price >= 0),
+    CONSTRAINT chk_product_price_history_actor_type
+        CHECK (changed_by_actor_type IN ('system', 'employee')),
+    CONSTRAINT chk_product_price_history_reason
+        CHECK (reason IS NULL OR length(btrim(reason)) > 0)
+);
+
+CREATE INDEX IF NOT EXISTS ix_product_price_history_product_id
+    ON product_price_history (product_id, created_at DESC);
+
+CREATE OR REPLACE FUNCTION product_price_history_prevent_change()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RAISE EXCEPTION 'product_price_history is append-only';
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION products_write_price_history()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_actor_type text;
+    v_actor_id_text text;
+    v_actor_id uuid;
+    v_request_id_text text;
+    v_request_id uuid;
+BEGIN
+    IF TG_OP = 'UPDATE'
+        AND NEW.price IS NOT DISTINCT FROM OLD.price
+        AND NEW.unit_id IS NOT DISTINCT FROM OLD.unit_id
+    THEN
+        RETURN NEW;
+    END IF;
+
+    v_actor_type := COALESCE(NULLIF(current_setting('app.actor_type', true), ''), 'system');
+    v_actor_id_text := NULLIF(current_setting('app.actor_id', true), '');
+    v_request_id_text := NULLIF(current_setting('app.request_id', true), '');
+
+    IF v_actor_id_text IS NOT NULL THEN
+        v_actor_id := v_actor_id_text::uuid;
+    END IF;
+
+    IF v_request_id_text IS NOT NULL THEN
+        v_request_id := v_request_id_text::uuid;
+    END IF;
+
+    INSERT INTO product_price_history (
+        product_id,
+        old_price,
+        new_price,
+        old_unit_id,
+        new_unit_id,
+        reason,
+        changed_by_actor_type,
+        changed_by_actor_id,
+        request_id
+    )
+    VALUES (
+        NEW.id,
+        CASE WHEN TG_OP = 'UPDATE' THEN OLD.price ELSE NULL END,
+        NEW.price,
+        CASE WHEN TG_OP = 'UPDATE' THEN OLD.unit_id ELSE NULL END,
+        NEW.unit_id,
+        NULLIF(current_setting('app.price_change_reason', true), ''),
+        v_actor_type,
+        v_actor_id,
+        v_request_id
+    );
+
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_products_write_price_history ON products;
+
+CREATE TRIGGER trg_products_write_price_history
+AFTER INSERT OR UPDATE OF price, unit_id ON products
+FOR EACH ROW
+EXECUTE FUNCTION products_write_price_history();
+
+DROP TRIGGER IF EXISTS trg_product_price_history_prevent_change ON product_price_history;
+
+CREATE TRIGGER trg_product_price_history_prevent_change
+BEFORE UPDATE OR DELETE ON product_price_history
+FOR EACH ROW
+EXECUTE FUNCTION product_price_history_prevent_change();
+
+DROP TRIGGER IF EXISTS trg_product_price_history_outbox ON product_price_history;
+
+CREATE TRIGGER trg_product_price_history_outbox
+AFTER INSERT ON product_price_history
+FOR EACH ROW
+EXECUTE FUNCTION publish_row_change_to_outbox();
+

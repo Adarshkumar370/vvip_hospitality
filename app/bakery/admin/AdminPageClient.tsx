@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
+import { RupeeAmount, RupeeIcon } from "@/components/ui/RupeeAmount";
 import {
     getHealthStatus,
     getProducts,
@@ -304,8 +305,9 @@ function UsersView() {
         setIsSavingBilling(false);
     };
 
-    const formatCurrency = (value: number | null | undefined) =>
-        `Rs. ${Number(value || 0).toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+    const formatCurrency = (value: number | null | undefined) => (
+        <RupeeAmount value={Number(value || 0).toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 2 })} />
+    );
 
     const formatBillingDate = (billingCycleDay: number | null | undefined) => {
         const date = new Date();
@@ -659,12 +661,14 @@ function PricingView() {
                                                     </div>
                                                     <div>
                                                         <p className="text-sm font-black text-brand-olive-dark">{product.name}</p>
-                                                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Base Price: â‚¹{product.price} {product.unit}</p>
+                                                        <p className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-gray-400">
+                                                            Base Price: <RupeeAmount value={product.price} /> {product.unit}
+                                                        </p>
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-4">
                                                     <div className="relative w-32">
-                                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-gold-bright font-black text-xs">â‚¹</span>
+                                                        <RupeeIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-gold-bright" />
                                                         <input
                                                             type="number"
                                                             value={userPrices[String(product.id)] || ""}
@@ -1238,7 +1242,7 @@ function StaffView() {
                                         <h4 className="font-black text-brand-olive-dark">{member.name}</h4>
                                         <div className="flex gap-4 text-[10px] text-gray-400 font-bold uppercase tracking-widest">
                                             <span>{member.role}</span>
-                                            <span>â€¢</span>
+                                            <span aria-hidden="true">-</span>
                                             <span>{member.phone}</span>
                                         </div>
                                     </div>
@@ -1378,7 +1382,7 @@ function OrdersView() {
                                                     </div>
                                                     <div className="flex-1">
                                                         <p className="font-black text-brand-olive-dark text-sm">{item.product_name}</p>
-                                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Qty: {item.quantity} Ã— â‚¹{item.price_at_time}</p>
+                                                        <p className="flex items-center gap-1 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Qty: {item.quantity} x <RupeeAmount value={item.price_at_time} /></p>
                                                     </div>
                                                 </div>
                                             ))}
@@ -1391,7 +1395,7 @@ function OrdersView() {
                                             </div>
                                             <div className="pt-4 border-t border-brand-olive-dark/10">
                                                 <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Total Amount</p>
-                                                <p className="text-2xl font-black text-brand-gold-bright">â‚¹{order.total_price}</p>
+                                                <p className="text-2xl font-black text-brand-gold-bright"><RupeeAmount value={order.total_price} /></p>
                                             </div>
                                         </div>
                                     </div>
@@ -1523,7 +1527,7 @@ function EditProductModal({ product, categories, onClose, onSave, isSubmitting }
                                 />
                             </div>
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-4">Price (â‚¹)</label>
+                                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-4">Price</label>
                                 <input
                                     required
                                     type="number"
@@ -1704,7 +1708,7 @@ function AddProductModal({ categories, onClose, onAdd, isSubmitting }: AddProduc
                                 />
                             </div>
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-4">Price (â‚¹)</label>
+                                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-4">Price</label>
                                 <input
                                     required
                                     type="number"
@@ -1810,7 +1814,7 @@ function ProductRow({ product, onEdit, onDelete, onLimitUpdate, isUpdating }: {
                 </div>
                 <div className="flex-1">
                     <p className="text-lg font-black text-brand-olive-dark">{product.name}</p>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-brand-gold-bright">{product.category} â€¢ â‚¹{product.price} {product.unit}</p>
+                    <p className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-brand-gold-bright">{product.category} <span aria-hidden="true">-</span> <RupeeAmount value={product.price} /> {product.unit}</p>
                     {product.description && <p className="text-xs text-gray-400 font-medium line-clamp-1 mt-1">{product.description}</p>}
                 </div>
             </div>

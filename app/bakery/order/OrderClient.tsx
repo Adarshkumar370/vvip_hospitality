@@ -15,6 +15,7 @@ import {
 import Link from "next/link";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
+import { RupeeAmount } from "@/components/ui/RupeeAmount";
 import { useCart } from "@/context/CartContext";
 
 interface Product {
@@ -75,10 +76,31 @@ export default function OrderClient({ initialProducts, initialCategories, user: 
     });
 
     const isPostpaid = billingSummary?.isPostpaid;
-    const formatCurrency = (value: number) => `Rs. ${Number(value || 0).toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+    const formatCurrency = (value: number) => (
+        <RupeeAmount value={Number(value || 0).toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 2 })} />
+    );
     const cycleLabel = billingSummary?.cycle
         ? `${new Date(billingSummary.cycle.start).toLocaleDateString()} to ${new Date(billingSummary.cycle.end).toLocaleDateString()}`
         : null;
+
+    const handleQuantityInput = (product: Product, rawValue: string) => {
+        const quantity = Number(rawValue);
+
+        if (!rawValue || Number.isNaN(quantity) || quantity <= 0) {
+            updateQuantity(product.id, 0);
+            return;
+        }
+
+        const normalizedQuantity = Math.max(0, Math.floor(quantity));
+        const existingCartItem = cart.find((item) => item.id === product.id);
+
+        if (existingCartItem) {
+            updateQuantity(product.id, normalizedQuantity);
+            return;
+        }
+
+        addToCart(product, normalizedQuantity);
+    };
 
     return (
         <div className="min-h-screen overflow-x-hidden bg-brand-soft-gray px-6 pb-20 pt-32">
@@ -255,7 +277,7 @@ export default function OrderClient({ initialProducts, initialCategories, user: 
                                             )}
                                             <div className="pt-2">
                                                 <p className="flex items-baseline gap-2 text-2xl font-black text-brand-gold-bright">
-                                                    Rs. {product.price}
+                                                    <RupeeAmount value={product.price} />
                                                     <span className="text-[10px] font-bold uppercase tracking-widest text-gray-600">/ {product.unit}</span>
                                                 </p>
                                             </div>
@@ -271,7 +293,16 @@ export default function OrderClient({ initialProducts, initialCategories, user: 
                                                     >
                                                         <Minus size={18} aria-hidden="true" />
                                                     </button>
-                                                    <span className="px-4 text-lg font-black text-brand-olive-dark">{cartItem.quantity}</span>
+                                                    <input
+                                                        type="text"
+                                                        inputMode="numeric"
+                                                        pattern="[0-9]*"
+                                                        value={String(cartItem.quantity)}
+                                                        onChange={(e) => handleQuantityInput(product, e.target.value)}
+                                                        disabled={!isAvailable}
+                                                        className="w-20 bg-transparent px-4 text-center text-lg font-black text-brand-olive-dark outline-none disabled:text-gray-400"
+                                                        aria-label={`Enter quantity for ${product.name}`}
+                                                    />
                                                     <button
                                                         onClick={() => updateQuantity(product.id, cartItem.quantity + 1)}
                                                         disabled={!isAvailable}

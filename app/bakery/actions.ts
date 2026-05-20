@@ -1189,7 +1189,8 @@ export async function getOrders() {
                     WHEN EXISTS (
                         SELECT 1 FROM payments pay
                         WHERE pay.order_id = o.id AND pay.payment_status = 'succeeded'
-                    ) OR o.payment_type_snapshot = 'postpaid_user' THEN 'paid'
+                    ) THEN 'paid'
+                    WHEN o.payment_type_snapshot = 'postpaid_user' THEN 'postpaid-pending'
                     WHEN o.order_status = 'payment_failed'
                       OR EXISTS (
                         SELECT 1 FROM payments pay
@@ -1222,6 +1223,7 @@ export async function getOrders() {
                             'quantity',        oi.quantity,
                             'price_at_time',   oi.unit_price,
                             'product_name',    oi.product_name_snapshot,
+                            'category',        COALESCE(oi.category_name_snapshot, ''),
                             'product_image',   COALESCE(p.image_url, '/images/bakery/sourdough.png')
                         ) ORDER BY oi.line_number
                     ) FILTER (WHERE oi.id IS NOT NULL),
@@ -1497,7 +1499,7 @@ export async function retryStaffInvoiceGeneration(orderId: string) {
         }
 
         const [order] = await sql`
-            SELECT id FROM orders
+            SELECT id, payment_type_snapshot FROM orders
             WHERE id = ${orderId}
         `;
         if (!order) return { success: false as const, error: "Order not found" };
@@ -1508,7 +1510,7 @@ export async function retryStaffInvoiceGeneration(orderId: string) {
               AND payment_status = 'succeeded'
             LIMIT 1
         `;
-        if (!payment) {
+        if (!payment && order.payment_type_snapshot !== "postpaid_user") {
             return { success: false as const, error: "No successful payment found for this order" };
         }
 
@@ -1684,7 +1686,8 @@ export async function getUserOrders(userId: string | number) {
                     WHEN EXISTS (
                         SELECT 1 FROM payments pay
                         WHERE pay.order_id = o.id AND pay.payment_status = 'succeeded'
-                    ) OR o.payment_type_snapshot = 'postpaid_user' THEN 'paid'
+                    ) THEN 'paid'
+                    WHEN o.payment_type_snapshot = 'postpaid_user' THEN 'postpaid-pending'
                     WHEN o.order_status = 'payment_failed'
                       OR EXISTS (
                         SELECT 1 FROM payments pay
@@ -1700,6 +1703,7 @@ export async function getUserOrders(userId: string | number) {
                             'quantity',        oi.quantity,
                             'price_at_time',   oi.unit_price,
                             'product_name',    oi.product_name_snapshot,
+                            'category',        COALESCE(oi.category_name_snapshot, ''),
                             'product_image',   COALESCE(p.image_url, '/images/bakery/sourdough.png')
                         ) ORDER BY oi.line_number
                     ) FILTER (WHERE oi.id IS NOT NULL),
@@ -1958,7 +1962,153 @@ const placeOrderSchema = z.object({
     addressId: uuidId,
 });
 
-export async function placeOrder(userId: string | number, items: { id: string | number, quantity: number }[], frontendTotal: number, addressId: string | number) {
+const cartLimitValidationSchema = z.object({
+    items: z.array(z.object({
+        id: uuidId,
+        quantity: z.number().positive(),
+    })).min(1),
+});
+
+async function validateDailyProductLimitsInternal(items: { id: string, quantity: number }[], excludeOrderId?: string | null) {
+    const violations: { productId: string; productName: string; remaining: number; unit: string; requested: number; error: string }[] = [];
+
+    for (const item of items) {
+        const [product] = await sql`
+            SELECT id, name, unit, max_daily_limit
+            FROM products
+            WHERE id = ${item.id}
+        `;
+
+        if (!product) {
+            violations.push({
+                productId: item.id,
+                productName: "Unknown product",
+                remaining: 0,
+                unit: "unit",
+                requested: item.quantity,
+                error: `Product ID ${item.id} not found`,
+            });
+            continue;
+        }
+
+        const maxDailyLimit = Number(product.max_daily_limit ?? 100);
+        if (maxDailyLimit <= 0) continue;
+
+        const dailyTotalRes = excludeOrderId
+            ? await sql`
+                SELECT COALESCE(SUM(oi.quantity), 0) as total
+                FROM order_items oi
+                JOIN orders o ON oi.order_id = o.id
+                WHERE oi.product_id = ${product.id}
+                  AND o.created_at >= CURRENT_DATE
+                  AND o.order_status != 'cancelled'
+                  AND o.id <> ${excludeOrderId}
+            `
+            : await sql`
+                SELECT COALESCE(SUM(oi.quantity), 0) as total
+                FROM order_items oi
+                JOIN orders o ON oi.order_id = o.id
+                WHERE oi.product_id = ${product.id}
+                  AND o.created_at >= CURRENT_DATE
+                  AND o.order_status != 'cancelled'
+            `;
+
+        const currentDailyTotal = parseFloat(dailyTotalRes[0].total);
+        if (currentDailyTotal + item.quantity > maxDailyLimit) {
+            const remaining = Math.max(0, maxDailyLimit - currentDailyTotal);
+            violations.push({
+                productId: String(product.id),
+                productName: product.name,
+                remaining,
+                unit: product.unit,
+                requested: item.quantity,
+                error: `Limit exceeded for ${product.name}. Only ${remaining} ${product.unit} remaining for today.`,
+            });
+        }
+    }
+
+    return {
+        allowed: violations.length === 0,
+        violations,
+    };
+}
+
+export async function validateCartProductLimits(items: { id: string | number, quantity: number }[]) {
+    try {
+        const session = await getIronSession<UserSessionData>(await cookies(), userSessionOptions);
+        if (!session?.user) {
+            return { success: false as const, error: "Unauthorized. Please log in again." };
+        }
+
+        const parsed = cartLimitValidationSchema.safeParse({ items });
+        if (!parsed.success) {
+            return { success: false as const, error: "Invalid cart data" };
+        }
+
+        return {
+            success: true as const,
+            ...(await validateDailyProductLimitsInternal(parsed.data.items)),
+        };
+    } catch (err) {
+        console.error("Failed to validate cart product limits:", err);
+        return { success: false as const, error: "Could not verify daily product limits" };
+    }
+}
+
+export async function validatePendingOrderForPayment(orderId: string | number, userId: string | number) {
+    if (!isUuid(orderId) || !isUuid(userId)) {
+        return { success: false as const, error: "Session user is no longer valid. Please sign in again." };
+    }
+
+    try {
+        const session = await getIronSession<UserSessionData>(await cookies(), userSessionOptions);
+        if (!session?.user) {
+            return { success: false as const, error: "Unauthorized. Please log in again." };
+        }
+
+        const [order] = await sql`
+            SELECT id, order_status
+            FROM orders
+            WHERE id = ${orderId}
+              AND user_id = ${userId}
+        `;
+        if (!order) {
+            return { success: false as const, error: "Order not found" };
+        }
+
+        if (!["payment_pending", "payment_failed"].includes(order.order_status)) {
+            return { success: false as const, error: "This order is no longer awaiting payment." };
+        }
+
+        const items = await sql`
+            SELECT product_id AS id, quantity
+            FROM order_items
+            WHERE order_id = ${orderId}
+            ORDER BY line_number
+        `;
+        const normalizedItems = items.map((item: any) => ({
+            id: String(item.id),
+            quantity: Number(item.quantity),
+        }));
+
+        const validation = await validateDailyProductLimitsInternal(normalizedItems, String(orderId));
+        return {
+            success: true as const,
+            ...validation,
+        };
+    } catch (err) {
+        console.error("Failed to validate pending order for payment:", err);
+        return { success: false as const, error: "Could not verify this pending order" };
+    }
+}
+
+export async function placeOrder(
+    userId: string | number,
+    items: { id: string | number, quantity: number }[],
+    frontendTotal: number,
+    addressId: string | number,
+    paymentMode: "prepaid" | "postpaid" = "prepaid"
+) {
     try {
         // 1. Verify User Session
         const session = await getIronSession<UserSessionData>(await cookies(), userSessionOptions);
@@ -1991,37 +2141,23 @@ export async function placeOrder(userId: string | number, items: { id: string | 
                 ON bp.user_id = u.id
             WHERE u.id = ${validData.userId}
         `;
-        const isPostpaidUser = userProfile?.payment_type === "postpaid_user";
+        const isEligibleForPostpaid = userProfile?.payment_type === "postpaid_user";
+        const isPostpaidUser = isEligibleForPostpaid && paymentMode === "postpaid";
         let calculatedTotal = 0;
         const finalItems: { product_id: string | number, quantity: number }[] = [];
+        const dailyLimitValidation = await validateDailyProductLimitsInternal(validData.items);
+        if (!dailyLimitValidation.allowed) {
+            return {
+                success: false,
+                error: dailyLimitValidation.violations[0]?.error || "Daily product limit exceeded.",
+            };
+        }
 
         for (const item of validData.items) {
             const product = availableProducts.find((p: any) => String(p.id) === String(item.id));
             if (!product) {
                 return { success: false, error: `Product ID ${item.id} not found` };
             }
-
-            // ── STOCK / DAILY LIMIT VALIDATION ─────────────────────────────────────
-            if (product.max_daily_limit > 0) {
-                const dailyTotalRes = await sql`
-                    SELECT COALESCE(SUM(oi.quantity), 0) as total
-                    FROM order_items oi
-                    JOIN orders o ON oi.order_id = o.id
-                    WHERE oi.product_id = ${product.id}
-                      AND o.created_at >= CURRENT_DATE
-                      AND o.order_status != 'cancelled'
-                `;
-                const currentDailyTotal = parseFloat(dailyTotalRes[0].total);
-                if (currentDailyTotal + item.quantity > product.max_daily_limit) {
-                    const remaining = Math.max(0, product.max_daily_limit - currentDailyTotal);
-                    return { 
-                        success: false, 
-                        error: `Limit exceeded for ${product.name}. Only ${remaining} ${product.unit} remaining for today.` 
-                    };
-                }
-            }
-            // ────────────────────────────────────────────────────────────────────────
-
             const itemTotal = product.price * item.quantity;
             calculatedTotal += itemTotal;
             finalItems.push({
@@ -2048,7 +2184,7 @@ export async function placeOrder(userId: string | number, items: { id: string | 
             if (calculatedTotal > availableCredit) {
                 return {
                     success: false,
-                    error: `Postpaid limit exceeded. Available balance is Rs. ${availableCredit.toFixed(2)}.`,
+                    error: `Postpaid limit exceeded. Available balance is INR ${availableCredit.toFixed(2)}.`,
                 };
             }
         }
@@ -2058,7 +2194,7 @@ export async function placeOrder(userId: string | number, items: { id: string | 
             const [order] = await tx`
                 INSERT INTO orders (
                     user_id, delivery_address_id, fulfillment_type,
-                    order_source, placed_by, order_status
+                    order_source, placed_by, order_status, payment_type_snapshot
                 )
                 VALUES (
                     ${validData.userId},
@@ -2066,7 +2202,8 @@ export async function placeOrder(userId: string | number, items: { id: string | 
                     'delivery',
                     'web',
                     'self',
-                    ${isPostpaidUser ? 'placed' : 'payment_pending'}
+                    ${isPostpaidUser ? 'placed' : 'payment_pending'},
+                    ${isPostpaidUser ? 'postpaid_user' : 'prepaid_user'}
                 )
                 RETURNING id
             `;
@@ -2192,7 +2329,7 @@ export async function updateUserBillingSettings(input: {
             } else {
                 await tx`
                     UPDATE user_billing_profiles
-                    SET billing_status = 'inactive'
+                    SET billing_status = 'closed'
                     WHERE user_id = ${input.userId}
                 `;
             }
@@ -2266,7 +2403,7 @@ export async function retryInvoiceGeneration(orderId: string, userId: string) {
         }
 
         const [order] = await sql`
-            SELECT id FROM orders
+            SELECT id, payment_type_snapshot FROM orders
             WHERE id = ${orderId} AND user_id = ${userId}
         `;
         if (!order) return { success: false, error: "Order not found" };
@@ -2276,7 +2413,9 @@ export async function retryInvoiceGeneration(orderId: string, userId: string) {
             WHERE order_id = ${orderId} AND payment_status = 'succeeded'
             LIMIT 1
         `;
-        if (!payment) return { success: false, error: "No successful payment found for this order" };
+        if (!payment && order.payment_type_snapshot !== "postpaid_user") {
+            return { success: false, error: "No successful payment found for this order" };
+        }
 
         const { generateAndUploadInvoicePdfForOrder } = await import("@/lib/invoice-service");
         const invoice = await generateAndUploadInvoicePdfForOrder(sql, orderId);
@@ -2286,3 +2425,5 @@ export async function retryInvoiceGeneration(orderId: string, userId: string) {
         return { success: false, error: err?.message || "Invoice generation failed" };
     }
 }
+
+

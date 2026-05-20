@@ -1,0 +1,82 @@
+-- Per-date overrides for product daily capacity.
+-- products.max_daily_limit is the default. This table handles holidays,
+-- staff shortages, bulk-order days, and product-specific production changes.
+
+CREATE TABLE IF NOT EXISTS product_daily_limit_overrides (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    product_id uuid NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    service_date date NOT NULL,
+    max_daily_limit numeric(12, 3) NOT NULL,
+    reason text,
+    is_active boolean NOT NULL DEFAULT true,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    version bigint NOT NULL DEFAULT 1,
+
+    CONSTRAINT chk_product_daily_limit_overrides_limit
+        CHECK (max_daily_limit >= 0),
+    CONSTRAINT chk_product_daily_limit_overrides_reason
+        CHECK (reason IS NULL OR length(btrim(reason)) > 0)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_product_daily_limit_overrides_product_date
+    ON product_daily_limit_overrides (product_id, service_date);
+
+CREATE INDEX IF NOT EXISTS ix_product_daily_limit_overrides_active_date
+    ON product_daily_limit_overrides (service_date, product_id)
+    WHERE is_active = true;
+
+CREATE OR REPLACE FUNCTION product_daily_limit_overrides_validate_unit()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_allows_fractional boolean;
+    v_decimal_precision smallint;
+BEGIN
+    SELECT mu.allows_fractional, mu.decimal_precision
+    INTO v_allows_fractional, v_decimal_precision
+    FROM products p
+    JOIN measurement_units mu ON mu.id = p.unit_id
+    WHERE p.id = NEW.product_id;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'product % does not exist', NEW.product_id;
+    END IF;
+
+    IF v_allows_fractional = false
+        AND NEW.max_daily_limit <> trunc(NEW.max_daily_limit)
+    THEN
+        RAISE EXCEPTION 'unit does not allow fractional daily limits';
+    END IF;
+
+    IF v_allows_fractional = true
+        AND NEW.max_daily_limit <> round(NEW.max_daily_limit, v_decimal_precision::integer)
+    THEN
+        RAISE EXCEPTION 'daily limit precision exceeds unit precision';
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_product_daily_limit_overrides_validate_unit ON product_daily_limit_overrides;
+
+CREATE TRIGGER trg_product_daily_limit_overrides_validate_unit
+BEFORE INSERT OR UPDATE OF product_id, max_daily_limit ON product_daily_limit_overrides
+FOR EACH ROW
+EXECUTE FUNCTION product_daily_limit_overrides_validate_unit();
+
+DROP TRIGGER IF EXISTS trg_product_daily_limit_overrides_set_updated_at ON product_daily_limit_overrides;
+
+CREATE TRIGGER trg_product_daily_limit_overrides_set_updated_at
+BEFORE UPDATE ON product_daily_limit_overrides
+FOR EACH ROW
+EXECUTE FUNCTION set_updated_at_and_version();
+
+DROP TRIGGER IF EXISTS trg_product_daily_limit_overrides_outbox ON product_daily_limit_overrides;
+
+CREATE TRIGGER trg_product_daily_limit_overrides_outbox
+AFTER INSERT OR UPDATE OR DELETE ON product_daily_limit_overrides
+FOR EACH ROW
+EXECUTE FUNCTION publish_row_change_to_outbox();

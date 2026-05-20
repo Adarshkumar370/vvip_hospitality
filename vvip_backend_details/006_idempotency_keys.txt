@@ -1,0 +1,47 @@
+-- Generic idempotency table.
+-- Use this for signup, address creation, contact update, payment initiation,
+-- order placement, and invoice generation requests.
+
+CREATE TABLE IF NOT EXISTS idempotency_keys (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    scope varchar(80) NOT NULL,
+    idempotency_key varchar(160) NOT NULL,
+    request_hash text NOT NULL,
+    user_id uuid REFERENCES app_users(id) ON DELETE SET NULL,
+    status varchar(30) NOT NULL DEFAULT 'started',
+    response_code integer,
+    response_body jsonb,
+    locked_until timestamptz,
+    expires_at timestamptz NOT NULL DEFAULT (now() + interval '24 hours'),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    version bigint NOT NULL DEFAULT 1,
+
+    CONSTRAINT chk_idempotency_keys_scope_not_blank
+        CHECK (length(btrim(scope)) > 0),
+    CONSTRAINT chk_idempotency_keys_key_not_blank
+        CHECK (length(btrim(idempotency_key)) > 0),
+    CONSTRAINT chk_idempotency_keys_request_hash_not_blank
+        CHECK (length(btrim(request_hash)) > 0),
+    CONSTRAINT chk_idempotency_keys_status
+        CHECK (status IN ('started', 'completed', 'failed')),
+    CONSTRAINT chk_idempotency_keys_expires_at
+        CHECK (expires_at > created_at)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_idempotency_keys_scope_key
+    ON idempotency_keys (scope, idempotency_key);
+
+CREATE INDEX IF NOT EXISTS ix_idempotency_keys_user_id
+    ON idempotency_keys (user_id);
+
+CREATE INDEX IF NOT EXISTS ix_idempotency_keys_expiry
+    ON idempotency_keys (expires_at);
+
+DROP TRIGGER IF EXISTS trg_idempotency_keys_set_updated_at ON idempotency_keys;
+
+CREATE TRIGGER trg_idempotency_keys_set_updated_at
+BEFORE UPDATE ON idempotency_keys
+FOR EACH ROW
+EXECUTE FUNCTION set_updated_at_and_version();
+

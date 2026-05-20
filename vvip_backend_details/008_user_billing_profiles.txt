@@ -1,0 +1,81 @@
+-- Postpaid billing settings for users.
+-- Only users with app_users.payment_type = 'postpaid_user' should have an
+-- active billing profile.
+
+CREATE TABLE IF NOT EXISTS user_billing_profiles (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id uuid NOT NULL UNIQUE REFERENCES app_users(id) ON DELETE CASCADE,
+    billing_status billing_profile_status NOT NULL DEFAULT 'active',
+    credit_limit numeric(12, 2) NOT NULL DEFAULT 0,
+    current_balance numeric(12, 2) NOT NULL DEFAULT 0,
+    billing_cycle_day smallint NOT NULL DEFAULT 1,
+    payment_terms_days smallint NOT NULL DEFAULT 7,
+    invoice_email citext,
+    tax_name varchar(150),
+    tax_id varchar(50),
+    notes text,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    version bigint NOT NULL DEFAULT 1,
+
+    CONSTRAINT chk_user_billing_profiles_credit_limit
+        CHECK (credit_limit >= 0),
+    CONSTRAINT chk_user_billing_profiles_current_balance
+        CHECK (current_balance >= 0 AND current_balance <= credit_limit),
+    CONSTRAINT chk_user_billing_profiles_billing_cycle_day
+        CHECK (billing_cycle_day BETWEEN 1 AND 28),
+    CONSTRAINT chk_user_billing_profiles_payment_terms_days
+        CHECK (payment_terms_days BETWEEN 0 AND 90),
+    CONSTRAINT chk_user_billing_profiles_invoice_email
+        CHECK (invoice_email IS NULL OR length(btrim(invoice_email::text)) > 0),
+    CONSTRAINT chk_user_billing_profiles_tax_name
+        CHECK (tax_name IS NULL OR length(btrim(tax_name)) > 0),
+    CONSTRAINT chk_user_billing_profiles_tax_id
+        CHECK (tax_id IS NULL OR length(btrim(tax_id)) > 0)
+);
+
+CREATE INDEX IF NOT EXISTS ix_user_billing_profiles_status
+    ON user_billing_profiles (billing_status);
+
+CREATE OR REPLACE FUNCTION user_billing_profiles_validate_postpaid_user()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_payment_type user_payment_type;
+BEGIN
+    SELECT payment_type
+    INTO v_payment_type
+    FROM app_users
+    WHERE id = NEW.user_id;
+
+    IF v_payment_type IS DISTINCT FROM 'postpaid_user'::user_payment_type THEN
+        RAISE EXCEPTION 'billing profile requires app_users.payment_type = postpaid_user for user_id %', NEW.user_id;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_user_billing_profiles_validate_postpaid_user ON user_billing_profiles;
+
+CREATE TRIGGER trg_user_billing_profiles_validate_postpaid_user
+BEFORE INSERT OR UPDATE OF user_id, billing_status ON user_billing_profiles
+FOR EACH ROW
+WHEN (NEW.billing_status = 'active')
+EXECUTE FUNCTION user_billing_profiles_validate_postpaid_user();
+
+DROP TRIGGER IF EXISTS trg_user_billing_profiles_set_updated_at ON user_billing_profiles;
+
+CREATE TRIGGER trg_user_billing_profiles_set_updated_at
+BEFORE UPDATE ON user_billing_profiles
+FOR EACH ROW
+EXECUTE FUNCTION set_updated_at_and_version();
+
+DROP TRIGGER IF EXISTS trg_user_billing_profiles_outbox ON user_billing_profiles;
+
+CREATE TRIGGER trg_user_billing_profiles_outbox
+AFTER INSERT OR UPDATE OR DELETE ON user_billing_profiles
+FOR EACH ROW
+EXECUTE FUNCTION publish_row_change_to_outbox();
+

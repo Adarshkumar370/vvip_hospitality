@@ -1,0 +1,87 @@
+MongoDB invoice/payment projection
+==================================
+
+Collections
+-----------
+- invoices
+- payments
+- receipts
+
+Purpose
+-------
+Denormalized billing documents for failover reads and reconciliation.
+PostgreSQL remains the source of truth. MongoDB records should be updated from
+outbox_events, not directly from the frontend, employee panel, or payment
+provider webhook.
+
+payments document
+-----------------
+{
+  "_id": "<payments.id>",
+  "user_id": "<app_users.id>",
+  "invoice_id": "<invoices.id>",
+  "order_id": "<orders.id>",
+  "amount": "899.00",
+  "currency_code": "INR",
+  "payment_method": "upi",
+  "payment_status": "failed",
+  "payment_provider": "razorpay",
+  "provider_payment_id": "pay_xxx",
+  "provider_order_id": "order_xxx",
+  "provider_status": "failed",
+  "provider_status_message": "Payment failed at bank",
+  "failure_code": "BANK_DECLINED",
+  "failure_message": "Bank declined the transaction",
+  "initiated_at": "2026-05-18T10:30:00Z",
+  "failed_at": "2026-05-18T10:32:00Z",
+  "postgres_version": 1,
+  "postgres_updated_at": "2026-05-18T10:32:00Z",
+  "last_event_id": "<outbox_events.id>",
+  "checksum": "<sha256 hash of canonical projection payload>",
+  "synced_at": "2026-05-18T10:32:02Z"
+}
+
+invoices document
+-----------------
+{
+  "_id": "<invoices.id>",
+  "invoice_number": "INV-0000000001",
+  "user_id": "<app_users.id>",
+  "order_id": "<orders.id>",
+  "invoice_status": "partially_paid",
+  "currency_code": "INR",
+  "subtotal_amount": "899.00",
+  "discount_amount": "0.00",
+  "tax_amount": "0.00",
+  "shipping_amount": "0.00",
+  "adjustment_amount": "0.00",
+  "total_amount": "899.00",
+  "paid_amount": "500.00",
+  "due_amount": "399.00",
+  "items": [],
+  "payments": [],
+  "receipts": [],
+  "postgres_version": 1,
+  "postgres_updated_at": "2026-05-18T10:35:00Z",
+  "last_event_id": "<outbox_events.id>",
+  "checksum": "<sha256 hash of canonical projection payload>",
+  "synced_at": "2026-05-18T10:35:02Z"
+}
+
+Recommended indexes
+-------------------
+db.invoices.createIndex({ invoice_number: 1 }, { unique: true })
+db.invoices.createIndex({ user_id: 1, created_at: -1 })
+db.invoices.createIndex({ invoice_status: 1, due_at: 1 })
+db.invoices.createIndex({ last_event_id: 1 }, { unique: true })
+
+db.payments.createIndex({ user_id: 1, created_at: -1 })
+db.payments.createIndex({ invoice_id: 1, created_at: -1 })
+db.payments.createIndex({ payment_status: 1, created_at: -1 })
+db.payments.createIndex({ payment_provider: 1, provider_payment_id: 1 }, { unique: true, sparse: true })
+db.payments.createIndex({ last_event_id: 1 }, { unique: true })
+
+db.receipts.createIndex({ receipt_number: 1 }, { unique: true })
+db.receipts.createIndex({ payment_id: 1 }, { unique: true })
+db.receipts.createIndex({ user_id: 1, issued_at: -1 })
+db.receipts.createIndex({ last_event_id: 1 }, { unique: true })

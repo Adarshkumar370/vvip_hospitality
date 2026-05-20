@@ -1,0 +1,64 @@
+-- Staff / employee table.
+-- Staff members can place orders on behalf of users, receive work orders, and
+-- be granted explicit permissions.
+
+CREATE SEQUENCE IF NOT EXISTS staff_employee_code_seq
+    START WITH 1
+    INCREMENT BY 1;
+
+CREATE TABLE IF NOT EXISTS staff_members (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    employee_code varchar(40) NOT NULL DEFAULT ('EMP-' || lpad(nextval('staff_employee_code_seq')::text, 6, '0')),
+    staff_name varchar(150) NOT NULL,
+    mobile_no varchar(20) NOT NULL,
+    email citext,
+    password_hash text,
+    designation staff_designation NOT NULL,
+    status staff_status NOT NULL DEFAULT 'active',
+    hired_at date NOT NULL DEFAULT current_date,
+    last_active_at timestamptz,
+    notes text,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    version bigint NOT NULL DEFAULT 1,
+
+    CONSTRAINT chk_staff_members_employee_code
+        CHECK (length(btrim(employee_code)) > 0),
+    CONSTRAINT chk_staff_members_name
+        CHECK (length(btrim(staff_name)) > 0),
+    CONSTRAINT chk_staff_members_mobile_no
+        CHECK (mobile_no ~ '^\+[1-9][0-9]{7,14}$'),
+    CONSTRAINT chk_staff_members_email
+        CHECK (email IS NULL OR length(btrim(email::text)) > 0),
+    CONSTRAINT chk_staff_members_password_hash
+        CHECK (password_hash IS NULL OR length(btrim(password_hash)) > 0),
+    CONSTRAINT chk_staff_members_notes
+        CHECK (notes IS NULL OR length(btrim(notes)) > 0)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_staff_members_employee_code
+    ON staff_members (employee_code);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_staff_members_mobile_no
+    ON staff_members (mobile_no);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_staff_members_email
+    ON staff_members (email)
+    WHERE email IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS ix_staff_members_designation_status
+    ON staff_members (designation, status);
+
+DROP TRIGGER IF EXISTS trg_staff_members_set_updated_at ON staff_members;
+
+CREATE TRIGGER trg_staff_members_set_updated_at
+BEFORE UPDATE ON staff_members
+FOR EACH ROW
+EXECUTE FUNCTION set_updated_at_and_version();
+
+DROP TRIGGER IF EXISTS trg_staff_members_outbox ON staff_members;
+
+CREATE TRIGGER trg_staff_members_outbox
+AFTER INSERT OR UPDATE OR DELETE ON staff_members
+FOR EACH ROW
+EXECUTE FUNCTION publish_row_change_to_outbox();

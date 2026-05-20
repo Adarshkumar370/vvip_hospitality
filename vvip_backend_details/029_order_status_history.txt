@@ -1,0 +1,124 @@
+-- Immutable order status history.
+
+CREATE TABLE IF NOT EXISTS order_status_history (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    order_id uuid NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    old_status order_status,
+    new_status order_status NOT NULL,
+    reason text,
+    changed_by_actor_type varchar(30) NOT NULL DEFAULT 'system',
+    changed_by_actor_id uuid,
+    request_id uuid,
+    created_at timestamptz NOT NULL DEFAULT now(),
+
+    CONSTRAINT chk_order_status_history_reason
+        CHECK (reason IS NULL OR length(btrim(reason)) > 0),
+    CONSTRAINT chk_order_status_history_actor_type
+        CHECK (changed_by_actor_type IN ('system', 'employee', 'user', 'provider'))
+);
+
+CREATE INDEX IF NOT EXISTS ix_order_status_history_order_id
+    ON order_status_history (order_id, created_at DESC);
+
+CREATE OR REPLACE FUNCTION order_status_history_prevent_change()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RAISE EXCEPTION 'order_status_history is append-only';
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION orders_write_status_history()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_actor_type text;
+    v_actor_id_text text;
+    v_actor_id uuid;
+    v_request_id_text text;
+    v_request_id uuid;
+    v_required_permission varchar(80);
+BEGIN
+    IF TG_OP = 'UPDATE' AND NEW.order_status IS NOT DISTINCT FROM OLD.order_status THEN
+        RETURN NEW;
+    END IF;
+
+    v_actor_type := COALESCE(NULLIF(current_setting('app.actor_type', true), ''), 'system');
+    v_actor_id_text := NULLIF(current_setting('app.actor_id', true), '');
+    v_request_id_text := NULLIF(current_setting('app.request_id', true), '');
+
+    IF v_actor_id_text IS NOT NULL THEN
+        v_actor_id := v_actor_id_text::uuid;
+    END IF;
+
+    IF v_request_id_text IS NOT NULL THEN
+        v_request_id := v_request_id_text::uuid;
+    END IF;
+
+    IF v_actor_type = 'employee' THEN
+        IF v_actor_id IS NULL THEN
+            RAISE EXCEPTION 'app.actor_id is required when app.actor_type = employee';
+        END IF;
+
+        v_required_permission := CASE NEW.order_status
+            WHEN 'confirmed' THEN 'mark_order_confirmed'
+            WHEN 'preparing' THEN 'mark_order_preparing'
+            WHEN 'ready_for_pickup' THEN 'mark_order_ready'
+            WHEN 'out_for_delivery' THEN 'mark_order_out_for_delivery'
+            WHEN 'completed' THEN 'mark_order_completed'
+            WHEN 'cancelled' THEN 'cancel_order'
+            ELSE NULL
+        END;
+
+        IF v_required_permission IS NOT NULL
+            AND NOT staff_has_permission(v_actor_id, v_required_permission)
+        THEN
+            RAISE EXCEPTION 'staff member does not have permission %', v_required_permission;
+        END IF;
+    END IF;
+
+    INSERT INTO order_status_history (
+        order_id,
+        old_status,
+        new_status,
+        reason,
+        changed_by_actor_type,
+        changed_by_actor_id,
+        request_id
+    )
+    VALUES (
+        NEW.id,
+        CASE WHEN TG_OP = 'UPDATE' THEN OLD.order_status ELSE NULL END,
+        NEW.order_status,
+        NULLIF(current_setting('app.order_status_reason', true), ''),
+        v_actor_type,
+        v_actor_id,
+        v_request_id
+    );
+
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_orders_write_status_history ON orders;
+
+CREATE TRIGGER trg_orders_write_status_history
+AFTER INSERT OR UPDATE OF order_status ON orders
+FOR EACH ROW
+EXECUTE FUNCTION orders_write_status_history();
+
+DROP TRIGGER IF EXISTS trg_order_status_history_prevent_change ON order_status_history;
+
+CREATE TRIGGER trg_order_status_history_prevent_change
+BEFORE UPDATE OR DELETE ON order_status_history
+FOR EACH ROW
+EXECUTE FUNCTION order_status_history_prevent_change();
+
+DROP TRIGGER IF EXISTS trg_order_status_history_outbox ON order_status_history;
+
+CREATE TRIGGER trg_order_status_history_outbox
+AFTER INSERT ON order_status_history
+FOR EACH ROW
+EXECUTE FUNCTION publish_row_change_to_outbox();

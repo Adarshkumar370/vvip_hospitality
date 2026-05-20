@@ -1,0 +1,62 @@
+-- Enum definitions used by invoice, payment, and receipt tables.
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'invoice_status') THEN
+        CREATE TYPE invoice_status AS ENUM (
+            'draft',
+            'issued',
+            'partially_paid',
+            'paid',
+            'overdue',
+            'void',
+            'cancelled'
+        );
+    END IF;
+END
+$$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'payment_status') THEN
+        CREATE TYPE payment_status AS ENUM (
+            'pending',
+            'processing',
+            'authorized',
+            'succeeded',
+            'failed',
+            'cancelled',
+            'expired',
+            'refunded',
+            'partially_refunded'
+        );
+    END IF;
+END
+$$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'payment_method') THEN
+        CREATE TYPE payment_method AS ENUM (
+            'cash',
+            'card',
+            'upi',
+            'net_banking',
+            'wallet',
+            'bank_transfer',
+            'online_gateway',
+            'postpaid_credit'
+        );
+    END IF;
+END
+$$;
+
+ALTER TYPE payment_method ADD VALUE IF NOT EXISTS 'online_gateway';
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'receipt_status') THEN
+        CREATE TYPE receipt_status AS ENUM ('issued', 'void');
+    END IF;
+END
+$$;

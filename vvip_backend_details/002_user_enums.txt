@@ -1,0 +1,59 @@
+-- Enum definitions used by the user module.
+-- DO blocks keep the script idempotent across repeated executions.
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_status') THEN
+        CREATE TYPE user_status AS ENUM ('allowed', 'banned');
+    END IF;
+END
+$$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_payment_type') THEN
+        CREATE TYPE user_payment_type AS ENUM ('prepaid_user', 'postpaid_user');
+    END IF;
+END
+$$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'billing_profile_status') THEN
+        CREATE TYPE billing_profile_status AS ENUM ('active', 'on_hold', 'closed');
+    END IF;
+END
+$$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'contact_type') THEN
+        CREATE TYPE contact_type AS ENUM ('email', 'mobile');
+    END IF;
+END
+$$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'verification_status') THEN
+        CREATE TYPE verification_status AS ENUM ('pending', 'verified', 'failed', 'expired', 'cancelled');
+    END IF;
+END
+$$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'attribute_data_type') THEN
+        CREATE TYPE attribute_data_type AS ENUM ('text', 'number', 'boolean', 'date', 'json');
+    END IF;
+END
+$$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'outbox_event_status') THEN
+        CREATE TYPE outbox_event_status AS ENUM ('pending', 'processing', 'processed', 'failed');
+    END IF;
+END
+$$;
+

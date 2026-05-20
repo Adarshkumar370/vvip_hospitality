@@ -1,0 +1,101 @@
+-- Immutable audit trail for app_users.status changes.
+
+CREATE TABLE IF NOT EXISTS user_status_history (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id uuid NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+    old_status user_status,
+    new_status user_status NOT NULL,
+    reason text,
+    changed_by_actor_type varchar(30) NOT NULL DEFAULT 'system',
+    changed_by_actor_id uuid,
+    request_id uuid,
+    created_at timestamptz NOT NULL DEFAULT now(),
+
+    CONSTRAINT chk_user_status_history_actor_type
+        CHECK (changed_by_actor_type IN ('system', 'employee', 'user')),
+    CONSTRAINT chk_user_status_history_reason_not_blank
+        CHECK (reason IS NULL OR length(btrim(reason)) > 0)
+);
+
+CREATE INDEX IF NOT EXISTS ix_user_status_history_user_id
+    ON user_status_history (user_id, created_at DESC);
+
+CREATE OR REPLACE FUNCTION user_status_history_prevent_change()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RAISE EXCEPTION 'user_status_history is append-only';
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION app_users_write_status_history()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_actor_type text;
+    v_actor_id_text text;
+    v_actor_id uuid;
+    v_request_id_text text;
+    v_request_id uuid;
+BEGIN
+    IF NEW.status IS NOT DISTINCT FROM OLD.status THEN
+        RETURN NEW;
+    END IF;
+
+    v_actor_type := COALESCE(NULLIF(current_setting('app.actor_type', true), ''), 'system');
+    v_actor_id_text := NULLIF(current_setting('app.actor_id', true), '');
+    v_request_id_text := NULLIF(current_setting('app.request_id', true), '');
+
+    IF v_actor_id_text IS NOT NULL THEN
+        v_actor_id := v_actor_id_text::uuid;
+    END IF;
+
+    IF v_request_id_text IS NOT NULL THEN
+        v_request_id := v_request_id_text::uuid;
+    END IF;
+
+    INSERT INTO user_status_history (
+        user_id,
+        old_status,
+        new_status,
+        reason,
+        changed_by_actor_type,
+        changed_by_actor_id,
+        request_id
+    )
+    VALUES (
+        NEW.id,
+        OLD.status,
+        NEW.status,
+        NULLIF(current_setting('app.status_reason', true), ''),
+        v_actor_type,
+        v_actor_id,
+        v_request_id
+    );
+
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_app_users_write_status_history ON app_users;
+
+CREATE TRIGGER trg_app_users_write_status_history
+AFTER UPDATE OF status ON app_users
+FOR EACH ROW
+EXECUTE FUNCTION app_users_write_status_history();
+
+DROP TRIGGER IF EXISTS trg_user_status_history_prevent_change ON user_status_history;
+
+CREATE TRIGGER trg_user_status_history_prevent_change
+BEFORE UPDATE OR DELETE ON user_status_history
+FOR EACH ROW
+EXECUTE FUNCTION user_status_history_prevent_change();
+
+DROP TRIGGER IF EXISTS trg_user_status_history_outbox ON user_status_history;
+
+CREATE TRIGGER trg_user_status_history_outbox
+AFTER INSERT ON user_status_history
+FOR EACH ROW
+EXECUTE FUNCTION publish_row_change_to_outbox();

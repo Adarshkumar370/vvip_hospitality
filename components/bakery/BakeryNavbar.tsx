@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useSyncExternalStore } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
@@ -19,6 +19,11 @@ export default function BakeryNavbar() {
     const [isScrolled, setIsScrolled] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
+    const isHydrated = useSyncExternalStore(
+        () => () => {},
+        () => true,
+        () => false
+    );
     const pathname = usePathname();
     const isMainBakeryPage = pathname === "/bakery";
     const showSolidNav = isScrolled || !isMainBakeryPage;
@@ -103,14 +108,14 @@ export default function BakeryNavbar() {
                     <div className="flex items-center gap-4">
                         <button
                             onClick={() => setIsCartOpen(true)}
-                            aria-label={`View shopping cart, ${totalItems} items`}
+                            aria-label={isHydrated ? `View shopping cart, ${totalItems} items` : "View shopping cart"}
                             className={cn(
                                 "p-3 transition-colors relative",
                                 showSolidNav ? "text-brand-olive-dark/70 hover:text-brand-gold-bright" : "text-white/70 hover:text-white"
                             )}
                         >
                             <ShoppingCart size={22} strokeWidth={2.5} aria-hidden="true" />
-                            {totalItems > 0 && (
+                            {isHydrated && totalItems > 0 && (
                                 <span className="absolute top-2 right-2 w-5 h-5 bg-brand-gold-bright rounded-full border-2 border-white text-[9px] flex items-center justify-center text-white font-black shadow-lg">
                                     {totalItems}
                                 </span>

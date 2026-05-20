@@ -1,10 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, ShoppingBag, Plus, Minus, Trash2, ArrowRight } from "lucide-react";
-import Link from "next/link";
+import { X, ShoppingBag, Plus, Minus, Trash2, ArrowRight, AlertCircle, Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useCart } from "@/context/CartContext";
-import { cn } from "@/lib/utils";
+import { validateCartProductLimits } from "@/app/bakery/actions";
+import { RupeeAmount } from "@/components/ui/RupeeAmount";
 import Image from "next/image";
 
 interface CartDrawerProps {
@@ -14,6 +16,41 @@ interface CartDrawerProps {
 
 export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
     const { cart, removeFromCart, updateQuantity, totalPrice, totalItems } = useCart();
+    const router = useRouter();
+    const [checkoutError, setCheckoutError] = useState<string | null>(null);
+    const [isCheckingOut, setIsCheckingOut] = useState(false);
+
+    const handleQuantityInput = (itemId: string | number, rawValue: string) => {
+        const quantity = Number(rawValue);
+
+        if (!rawValue || Number.isNaN(quantity) || quantity <= 0) {
+            updateQuantity(itemId, 0);
+            return;
+        }
+
+        updateQuantity(itemId, Math.floor(quantity));
+    };
+
+    const handleProceedToCheckout = async () => {
+        setCheckoutError(null);
+        setIsCheckingOut(true);
+        const itemsPayload = cart.map((item) => ({ id: item.id, quantity: item.quantity }));
+
+        const dailyLimitRes = await validateCartProductLimits(itemsPayload);
+        if (!dailyLimitRes.success) {
+            setCheckoutError(dailyLimitRes.error || "Could not verify daily product limits.");
+            setIsCheckingOut(false);
+            return;
+        }
+        if (!dailyLimitRes.allowed) {
+            setCheckoutError(dailyLimitRes.violations[0]?.error || "Daily product limit exceeded.");
+            setIsCheckingOut(false);
+            return;
+        }
+
+        onClose();
+        router.push("/bakery/checkout");
+    };
 
     return (
         <AnimatePresence>
@@ -91,7 +128,9 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                                         <div className="flex-1 space-y-2">
                                             <div className="flex justify-between">
                                                 <h4 className="font-serif font-black text-brand-olive-dark">{item.name}</h4>
-                                                <p className="font-black text-brand-gold-bright">₹{item.price * item.quantity}</p>
+                                                <p className="font-black text-brand-gold-bright">
+                                                    <RupeeAmount value={item.price * item.quantity} />
+                                                </p>
                                             </div>
                                             <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">{item.category}</p>
 
@@ -103,7 +142,15 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                                                     >
                                                         <Minus size={14} />
                                                     </button>
-                                                    <span className="w-8 text-center text-sm font-black text-brand-olive-dark">{item.quantity}</span>
+                                                    <input
+                                                        type="text"
+                                                        inputMode="numeric"
+                                                        pattern="[0-9]*"
+                                                        value={String(item.quantity)}
+                                                        onChange={(e) => handleQuantityInput(item.id, e.target.value)}
+                                                        className="w-10 bg-transparent text-center text-sm font-black text-brand-olive-dark outline-none"
+                                                        aria-label={`Enter quantity for ${item.name}`}
+                                                    />
                                                     <button
                                                         onClick={() => updateQuantity(item.id, item.quantity + 1)}
                                                         className="p-1 text-brand-olive-dark/60 hover:text-brand-olive-dark transition-colors"
@@ -130,22 +177,39 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                                 <div className="space-y-2">
                                     <div className="flex justify-between text-sm">
                                         <span className="text-gray-500 font-medium">Subtotal</span>
-                                        <span className="font-black text-brand-olive-dark">₹{totalPrice}</span>
+                                        <RupeeAmount className="font-black text-brand-olive-dark" value={totalPrice} />
                                     </div>
                                     <div className="flex justify-between text-base">
                                         <span className="text-brand-olive-dark font-black">Total Price</span>
-                                        <span className="font-serif font-black text-2xl text-brand-olive-dark">₹{totalPrice}</span>
+                                        <RupeeAmount className="font-serif font-black text-2xl text-brand-olive-dark" value={totalPrice} />
                                     </div>
                                 </div>
 
-                                <Link
-                                    href="/bakery/checkout"
-                                    onClick={onClose}
-                                    className="w-full bg-brand-olive-dark text-white py-5 rounded-2xl font-black text-lg flex items-center justify-center gap-3 hover:bg-brand-gold-bright transition-all shadow-xl active:scale-95 group text-center"
+                                {checkoutError && (
+                                    <div className="flex items-start gap-3 rounded-2xl border border-red-500/20 bg-red-50 p-4">
+                                        <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-red-500" />
+                                        <p className="text-xs font-bold leading-snug text-red-700">{checkoutError}</p>
+                                    </div>
+                                )}
+
+                                <button
+                                    type="button"
+                                    onClick={handleProceedToCheckout}
+                                    disabled={isCheckingOut}
+                                    className="w-full bg-brand-olive-dark text-white py-5 rounded-2xl font-black text-lg flex items-center justify-center gap-3 hover:bg-brand-gold-bright transition-all shadow-xl active:scale-95 group text-center disabled:cursor-not-allowed disabled:bg-gray-400"
                                 >
-                                    Proceed to Checkout
-                                    <ArrowRight size={24} className="group-hover:translate-x-1 transition-transform" />
-                                </Link>
+                                    {isCheckingOut ? (
+                                        <>
+                                            <Loader2 size={24} className="animate-spin" />
+                                            Checking Limit...
+                                        </>
+                                    ) : (
+                                        <>
+                                            Proceed to Checkout
+                                            <ArrowRight size={24} className="group-hover:translate-x-1 transition-transform" />
+                                        </>
+                                    )}
+                                </button>
 
                                 <p className="text-[10px] text-center text-gray-400 uppercase tracking-widest font-bold">
                                     Exclusive Partner Pricing Applied

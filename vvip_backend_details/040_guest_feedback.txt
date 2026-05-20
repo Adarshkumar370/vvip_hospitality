@@ -1,0 +1,58 @@
+-- Hotel guest feedback table.
+-- This table is intentionally separate from the bakery service domain.
+
+CREATE TABLE IF NOT EXISTS public.guest_feedback (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    hotel_name character varying(255) NOT NULL,
+    room_number character varying(50) NOT NULL,
+    guest_name character varying(255),
+    check_in_date date NOT NULL,
+    check_out_date date NOT NULL,
+    booking_method character varying(100) NOT NULL,
+    booking_method_other character varying(255),
+    purpose_of_visit character varying(100) NOT NULL,
+    purpose_of_visit_other character varying(255),
+    cleanliness_room character varying(20),
+    cleanliness_bathroom character varying(20),
+    comfort_bed character varying(20),
+    room_facilities character varying(20),
+    bathroom_facilities character varying(20),
+    wifi character varying(20),
+    noise_levels character varying(20),
+    safety character varying(20),
+    staff_behavior character varying(20),
+    check_in_speed character varying(20),
+    maintenance character varying(20),
+    value_for_money character varying(20),
+    stay_again character varying(10),
+    recommend character varying(10),
+    like_most text,
+    improve text,
+    additional_comments text,
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+
+    CONSTRAINT guest_feedback_pkey PRIMARY KEY (id),
+    CONSTRAINT chk_guest_feedback_hotel_name
+        CHECK (length(btrim(hotel_name)) > 0),
+    CONSTRAINT chk_guest_feedback_room_number
+        CHECK (length(btrim(room_number)) > 0),
+    CONSTRAINT chk_guest_feedback_guest_name
+        CHECK (guest_name IS NULL OR length(btrim(guest_name)) > 0),
+    CONSTRAINT chk_guest_feedback_dates
+        CHECK (check_out_date >= check_in_date),
+    CONSTRAINT chk_guest_feedback_booking_method
+        CHECK (length(btrim(booking_method)) > 0),
+    CONSTRAINT chk_guest_feedback_booking_method_other
+        CHECK (booking_method_other IS NULL OR length(btrim(booking_method_other)) > 0),
+    CONSTRAINT chk_guest_feedback_purpose_of_visit
+        CHECK (length(btrim(purpose_of_visit)) > 0),
+    CONSTRAINT chk_guest_feedback_purpose_of_visit_other
+        CHECK (purpose_of_visit_other IS NULL OR length(btrim(purpose_of_visit_other)) > 0)
+) TABLESPACE pg_default;
+
+CREATE INDEX IF NOT EXISTS ix_guest_feedback_hotel_created_at
+    ON public.guest_feedback (hotel_name, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS ix_guest_feedback_created_at
+    ON public.guest_feedback (created_at DESC);
+

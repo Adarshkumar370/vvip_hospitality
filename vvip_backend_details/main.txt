@@ -1,0 +1,228 @@
+-- Bakery Service Schema
+-- =====================
+--
+-- PostgreSQL is the source of truth. MongoDB should store denormalized user,
+-- catalog, order, staff, and billing projections for failover reads and
+-- recovery checks. Changes should flow from PostgreSQL through outbox_events
+-- into MongoDB.
+--
+-- Run from this directory with:
+-- psql -v ON_ERROR_STOP=1 -f main.txt
+--
+-- Execution order
+-- ---------------
+-- 1. 001_extensions.txt
+-- 2. 002_user_enums.txt
+-- 3. 003_common_trigger_functions.txt
+-- 4. 004_outbox_events.txt
+-- 5. 005_app_users.txt
+-- 6. 006_idempotency_keys.txt
+-- 7. 007_user_addresses.txt
+-- 8. 008_user_billing_profiles.txt
+-- 9. 009_user_status_history.txt
+-- 10. 010_user_contact_verifications.txt
+-- 11. 011_user_attribute_definitions.txt
+-- 12. 012_user_attributes.txt
+-- 13. 013_user_order_eligibility_functions.txt
+-- 14. 014_mongo_user_schema.txt (documentation only, not executed by psql)
+-- 15. 015_product_enums.txt
+-- 16. 016_measurement_units.txt
+-- 17. 017_product_categories.txt
+-- 18. 018_products.txt
+-- 19. 019_product_price_history.txt
+-- 20. 020_product_daily_limit_overrides.txt
+-- 21. 021_mongo_product_schema.txt (documentation only, not executed by psql)
+-- 22. 022_user_product_prices.txt
+-- 23. 023_staff_enums.txt
+-- 24. 024_staff_members.txt
+-- 25. 025_staff_permissions.txt
+-- 26. 026_order_enums.txt
+-- 27. 027_orders.txt
+-- 28. 028_order_items.txt
+-- 29. 029_order_status_history.txt
+-- 30. 030_work_orders.txt
+-- 31. 031_mongo_order_schema.txt (documentation only, not executed by psql)
+-- 32. 032_payment_invoice_enums.txt
+-- 33. 033_invoices.txt
+-- 34. 034_invoice_items.txt
+-- 35. 035_payments.txt
+-- 36. 036_payment_status_history.txt
+-- 37. 037_receipts.txt
+-- 38. 038_mongo_invoice_payment_schema.txt (documentation only, not executed by psql)
+-- 39. 039_mongo_staff_schema.txt (documentation only, not executed by psql)
+-- 40. 040_guest_feedback.txt
+-- 41. 041_seed_swiss_affaire_products.txt
+--
+-- User account rules
+-- ------------------
+-- - mobile_no is compulsory at signup.
+-- - email is optional at signup.
+-- - mobile_no must be stored in normalized E.164 format, for example +919999999999.
+-- - email and mobile_no are both required for ordering.
+-- - email and mobile_no should both be verified before ordering.
+-- - status controls whether the user can place orders: allowed or banned.
+-- - payment_type controls whether the user is prepaid_user or postpaid_user.
+--
+-- Core user tables
+-- ----------------
+-- - app_users: one row per user, stores unique account data.
+-- - user_addresses: multiple addresses per user, with one active default address.
+-- - user_billing_profiles: optional one-to-one postpaid settings.
+-- - user_status_history: immutable audit trail for allowed/banned changes.
+-- - user_contact_verifications: verification attempts and success records.
+--
+-- Flexible metadata tables
+-- ------------------------
+-- - user_attribute_definitions: replacement for a generic user_master table.
+-- - user_attributes: replacement for a generic user_details table.
+--
+-- Do not use user_attributes for core business data such as addresses, mobile,
+-- email, payment type, or verification. Those fields need strict PostgreSQL
+-- constraints and are modeled explicitly.
+--
+-- Reliability tables
+-- ------------------
+-- - idempotency_keys: prevents duplicate signup/address/contact update requests.
+-- - outbox_events: reliable queue for syncing user changes to MongoDB.
+--
+-- MongoDB failover/read projection
+-- --------------------------------
+-- The MongoDB user document should be a denormalized projection keyed by the
+-- PostgreSQL app_users.id value. Store postgres_version, postgres_updated_at,
+-- last_event_id, and checksum so records can be compared with PostgreSQL.
+--
+-- Ordering eligibility
+-- --------------------
+-- Use can_user_place_order(user_id) before allowing an order. The orders table
+-- also calls the same function so the database blocks invalid orders even if
+-- the frontend or API misses validation.
+--
+-- Audit context for status changes
+-- --------------------------------
+-- Before changing app_users.status, the application can set these transaction
+-- local values:
+--
+-- SET LOCAL app.actor_type = 'employee';
+-- SET LOCAL app.actor_id = '00000000-0000-0000-0000-000000000000';
+-- SET LOCAL app.status_reason = 'Fraudulent payment activity';
+-- SET LOCAL app.request_id = '00000000-0000-0000-0000-000000000000';
+--
+-- Product catalog rules
+-- ---------------------
+-- - product_categories is separate so the storefront can filter and group the
+--   visual catalog by category.
+-- - product_categories.status controls whether a category appears on the
+--   storefront filter.
+-- - products.status controls whether a product appears on the storefront.
+-- - Storefront queries should show only categories and products where both
+--   category.status = 'show' and product.status = 'show'.
+-- - products.price is the current price per measurement unit.
+-- - order_items snapshot product name, unit, and price so old orders remain
+--   correct after catalog changes.
+-- - products.max_daily_limit is the default production/sale limit per service
+--   date. product_daily_limit_overrides can change that value for a specific
+--   date.
+-- - products.price is the default product price.
+-- - user_product_prices.price overrides products.price for a specific user and
+--   product when an active override exists.
+-- - If no active user_product_prices row exists, use products.price.
+--
+-- Audit context for product price changes
+-- ---------------------------------------
+-- Before changing products.price or products.unit_id, the application can set:
+--
+-- SET LOCAL app.actor_type = 'employee';
+-- SET LOCAL app.actor_id = '00000000-0000-0000-0000-000000000000';
+-- SET LOCAL app.price_change_reason = 'Ingredient cost update';
+-- SET LOCAL app.request_id = '00000000-0000-0000-0000-000000000000';
+--
+-- Staff, permissions, and work order rules
+-- ----------------------------------------
+-- - staff_members stores bakery employees: accountant, baker_chef,
+--   delivery_person, manager, and admin.
+-- - admin staff have all active permissions by default.
+-- - non-admin staff need active staff_permissions rows.
+-- - staff_permissions can grant permissions such as mark_order_completed,
+--   place_order_on_behalf, assign_work_orders, and complete_work_orders.
+-- - work_orders assign operational tasks to a staff member or designation.
+-- - assigned staff can mark their own work order completed; completing another
+--   staff member's work order requires complete_work_orders.
+--
+-- Order rules
+-- -----------
+-- - orders require can_user_place_order(user_id) to be true.
+-- - orders.placed_by tells whether the order was placed by the customer or by
+--   staff on behalf of the customer.
+-- - staff-placed orders require orders.placed_by_staff_id and the
+--   place_order_on_behalf permission.
+-- - delivery orders snapshot the user's selected/default address.
+-- - order_items resolve price from user_product_prices when active; otherwise
+--   they use products.price.
+-- - order totals are recalculated from order_items.
+-- - order_status_history is append-only and records every status transition.
+-- - employee status changes are checked against permissions such as
+--   mark_order_completed and cancel_order when app.actor_type = 'employee'.
+--
+-- Audit context for order status changes
+-- --------------------------------------
+-- Before changing orders.order_status, the application can set:
+--
+-- SET LOCAL app.actor_type = 'employee';
+-- SET LOCAL app.actor_id = '00000000-0000-0000-0000-000000000000';
+-- SET LOCAL app.order_status_reason = 'Accepted by bakery team';
+-- SET LOCAL app.request_id = '00000000-0000-0000-0000-000000000000';
+--
+-- Invoice, payment, and receipt rules
+-- -----------------------------------
+-- - invoices store the billed amount and payment progress for a user/order.
+-- - invoice_items snapshot product, unit, quantity, and price at billing time.
+-- - payments store all payment attempts, including pending and failed attempts.
+-- - receipts are issued only for payments with payment_status = 'succeeded'.
+-- - order_id columns are real foreign keys to orders(id).
+-- - failed payment details should be stored in payments.failure_code,
+--   payments.failure_message, and provider_response_payload.
+-- - payment_status_history is append-only and records every status transition.
+--
+-- Hotel guest feedback
+-- --------------------
+-- - guest_feedback is unrelated to the bakery domain.
+-- - It is included here because this database also needs to collect hotel
+--   feedback form submissions.
+
+\i 001_extensions.txt
+\i 002_user_enums.txt
+\i 003_common_trigger_functions.txt
+\i 004_outbox_events.txt
+\i 005_app_users.txt
+\i 006_idempotency_keys.txt
+\i 007_user_addresses.txt
+\i 008_user_billing_profiles.txt
+\i 009_user_status_history.txt
+\i 010_user_contact_verifications.txt
+\i 011_user_attribute_definitions.txt
+\i 012_user_attributes.txt
+\i 013_user_order_eligibility_functions.txt
+\i 015_product_enums.txt
+\i 016_measurement_units.txt
+\i 017_product_categories.txt
+\i 018_products.txt
+\i 019_product_price_history.txt
+\i 020_product_daily_limit_overrides.txt
+\i 022_user_product_prices.txt
+\i 023_staff_enums.txt
+\i 024_staff_members.txt
+\i 025_staff_permissions.txt
+\i 026_order_enums.txt
+\i 027_orders.txt
+\i 028_order_items.txt
+\i 029_order_status_history.txt
+\i 030_work_orders.txt
+\i 032_payment_invoice_enums.txt
+\i 033_invoices.txt
+\i 034_invoice_items.txt
+\i 035_payments.txt
+\i 036_payment_status_history.txt
+\i 037_receipts.txt
+\i 040_guest_feedback.txt
+\i 041_seed_swiss_affaire_products.txt
+

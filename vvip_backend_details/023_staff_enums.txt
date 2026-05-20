@@ -1,0 +1,58 @@
+-- Enum definitions used by staff, permissions, and work orders.
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'staff_designation') THEN
+        CREATE TYPE staff_designation AS ENUM (
+            'accountant',
+            'baker_chef',
+            'delivery_person',
+            'manager',
+            'admin'
+        );
+    END IF;
+END
+$$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'staff_status') THEN
+        CREATE TYPE staff_status AS ENUM ('active', 'inactive', 'suspended');
+    END IF;
+END
+$$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'work_order_status') THEN
+        CREATE TYPE work_order_status AS ENUM (
+            'pending',
+            'assigned',
+            'in_progress',
+            'blocked',
+            'completed',
+            'cancelled'
+        );
+    END IF;
+END
+$$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'work_order_task_type') THEN
+        CREATE TYPE work_order_task_type AS ENUM (
+            'order_review',
+            'baking',
+            'packing',
+            'delivery',
+            'payment_followup',
+            'invoice_review',
+            'customer_call',
+            'other'
+        );
+    END IF;
+END
+$$;
+
+
+

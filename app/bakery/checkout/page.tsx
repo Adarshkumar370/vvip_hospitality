@@ -14,8 +14,9 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
-import { getAddresses, createRazorpayOrder, verifyRazorpayPayment, placeOrder } from "@/app/bakery/actions";
+import { getAddresses, createRazorpayOrder, verifyRazorpayPayment, placeOrder, validateCartProductLimits } from "@/app/bakery/actions";
 import { cn } from "@/lib/utils";
+import { RupeeAmount } from "@/components/ui/RupeeAmount";
 import Image from "next/image";
 
 declare global {
@@ -81,6 +82,11 @@ export default function CheckoutPage() {
     const [error, setError] = useState<string | null>(null);
 
     const isPostpaidUser = user?.payment_type === "postpaid_user";
+    const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<"prepaid" | "postpaid">("prepaid");
+
+    useEffect(() => {
+        setSelectedPaymentMethod(isPostpaidUser ? "postpaid" : "prepaid");
+    }, [isPostpaidUser]);
 
     useEffect(() => {
         if (!isAuthLoading && !user) {
@@ -89,7 +95,7 @@ export default function CheckoutPage() {
     }, [user, isAuthLoading, router]);
 
     useEffect(() => {
-        if (isPostpaidUser) return;
+        if (selectedPaymentMethod === "postpaid") return;
 
         const script = document.createElement("script");
         script.src = "https://checkout.razorpay.com/v1/checkout.js";
@@ -98,7 +104,7 @@ export default function CheckoutPage() {
         return () => {
             document.body.removeChild(script);
         };
-    }, [isPostpaidUser]);
+    }, [selectedPaymentMethod]);
 
     const loadAddresses = useCallback(async () => {
         if (!user) return;
@@ -123,7 +129,7 @@ export default function CheckoutPage() {
     const finalizeOrder = async () => {
         if (!user || !selectedAddressId || cart.length === 0) return;
         const itemsPayload = cart.map((item) => ({ id: item.id, quantity: item.quantity }));
-        return placeOrder(user.id, itemsPayload, totalPrice, selectedAddressId) as Promise<PlaceOrderResult>;
+        return placeOrder(user.id, itemsPayload, totalPrice, selectedAddressId, selectedPaymentMethod) as Promise<PlaceOrderResult>;
     };
 
     const handleCheckout = async () => {
@@ -133,10 +139,15 @@ export default function CheckoutPage() {
         setError(null);
 
         try {
+            const itemsPayload = cart.map((item) => ({ id: item.id, quantity: item.quantity }));
+            const dailyLimitRes = await validateCartProductLimits(itemsPayload);
+            if (!dailyLimitRes.success) throw new Error(dailyLimitRes.error || "Could not verify daily product limits.");
+            if (!dailyLimitRes.allowed) throw new Error(dailyLimitRes.violations[0]?.error || "Daily product limit exceeded.");
+
             const orderRes = await finalizeOrder();
             if (!orderRes?.success) throw new Error(orderRes?.error || "Failed to place order");
 
-            if (orderRes.paymentMode === "postpaid") {
+            if (selectedPaymentMethod === "postpaid" && orderRes.paymentMode === "postpaid") {
                 clearCart();
                 router.push("/bakery/settings?tab=orders");
                 return;
@@ -288,22 +299,78 @@ export default function CheckoutPage() {
                                 <h2 className="text-2xl font-serif font-black text-brand-olive-dark">Payment Method</h2>
                             </div>
 
-                            <div className="rounded-3xl border border-brand-olive-dark/5 bg-brand-soft-gray/50 p-6">
-                                <div className="flex items-center justify-between gap-4">
-                                    <div className="flex items-center gap-4">
-                                        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white text-brand-gold-bright shadow-sm">
-                                            {isPostpaidUser ? <CreditCard size={20} /> : <CheckCircle2 size={20} />}
+                            {isPostpaidUser ? (
+                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setSelectedPaymentMethod("prepaid")}
+                                        className={cn(
+                                            "rounded-3xl border p-6 text-left transition-all",
+                                            selectedPaymentMethod === "prepaid"
+                                                ? "border-brand-gold-bright bg-brand-gold-bright/5"
+                                                : "border-brand-olive-dark/5 bg-brand-soft-gray/50"
+                                        )}
+                                    >
+                                        <div className="flex items-center justify-between gap-4">
+                                            <div className="flex items-center gap-4">
+                                                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white text-brand-gold-bright shadow-sm">
+                                                    <CheckCircle2 size={20} />
+                                                </div>
+                                                <div>
+                                                    <p className="font-black text-brand-olive-dark">Prepaid</p>
+                                                    <p className="text-xs font-bold uppercase tracking-widest text-gray-400">
+                                                        Pay now with Razorpay
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            {selectedPaymentMethod === "prepaid" && <CheckCircle2 className="text-brand-gold-bright" />}
                                         </div>
-                                        <div>
-                                            <p className="font-black text-brand-olive-dark">{isPostpaidUser ? "Postpaid Billing" : "Razorpay Secure"}</p>
-                                            <p className="text-xs font-bold uppercase tracking-widest text-gray-400">
-                                                {isPostpaidUser ? "Order is accepted now and billed in your cycle" : "Cards, UPI, Netbanking, Wallets"}
-                                            </p>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => setSelectedPaymentMethod("postpaid")}
+                                        className={cn(
+                                            "rounded-3xl border p-6 text-left transition-all",
+                                            selectedPaymentMethod === "postpaid"
+                                                ? "border-brand-gold-bright bg-brand-gold-bright/5"
+                                                : "border-brand-olive-dark/5 bg-brand-soft-gray/50"
+                                        )}
+                                    >
+                                        <div className="flex items-center justify-between gap-4">
+                                            <div className="flex items-center gap-4">
+                                                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white text-brand-gold-bright shadow-sm">
+                                                    <CreditCard size={20} />
+                                                </div>
+                                                <div>
+                                                    <p className="font-black text-brand-olive-dark">Postpaid</p>
+                                                    <p className="text-xs font-bold uppercase tracking-widest text-gray-400">
+                                                        Bill to active credit cycle
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            {selectedPaymentMethod === "postpaid" && <CheckCircle2 className="text-brand-gold-bright" />}
                                         </div>
-                                    </div>
-                                    <CheckCircle2 className="text-brand-gold-bright" />
+                                    </button>
                                 </div>
-                            </div>
+                            ) : (
+                                <div className="rounded-3xl border border-brand-olive-dark/5 bg-brand-soft-gray/50 p-6">
+                                    <div className="flex items-center justify-between gap-4">
+                                        <div className="flex items-center gap-4">
+                                            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white text-brand-gold-bright shadow-sm">
+                                                <CheckCircle2 size={20} />
+                                            </div>
+                                            <div>
+                                                <p className="font-black text-brand-olive-dark">Prepaid</p>
+                                                <p className="text-xs font-bold uppercase tracking-widest text-gray-400">
+                                                    Cards, UPI, Netbanking, Wallets
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <CheckCircle2 className="text-brand-gold-bright" />
+                                    </div>
+                                </div>
+                            )}
                         </section>
                     </div>
 
@@ -323,7 +390,9 @@ export default function CheckoutPage() {
                                                 <p className="text-[10px] font-black uppercase text-white/40">x{item.quantity}</p>
                                             </div>
                                         </div>
-                                        <p className="text-sm font-black">Rs. {item.price * item.quantity}</p>
+                                        <p className="text-sm font-black">
+                                            <RupeeAmount value={item.price * item.quantity} />
+                                        </p>
                                     </div>
                                 ))}
                             </div>
@@ -331,7 +400,7 @@ export default function CheckoutPage() {
                             <div className="space-y-4 border-t border-white/10 pt-8">
                                 <div className="flex items-center justify-between text-white/60">
                                     <span className="text-xs font-black uppercase tracking-widest">Subtotal</span>
-                                    <span className="font-black">Rs. {totalPrice}</span>
+                                    <RupeeAmount className="font-black" value={totalPrice} />
                                 </div>
                                 <div className="flex items-center justify-between text-white/60">
                                     <span className="text-xs font-black uppercase tracking-widest">Delivery</span>
@@ -339,7 +408,7 @@ export default function CheckoutPage() {
                                 </div>
                                 <div className="flex items-center justify-between border-t border-white/20 pt-4">
                                     <span className="text-lg font-serif font-black">Total</span>
-                                    <span className="text-3xl font-serif font-black text-brand-gold-bright">Rs. {totalPrice}</span>
+                                    <RupeeAmount className="text-3xl font-serif font-black text-brand-gold-bright" value={totalPrice} />
                                 </div>
                             </div>
 
@@ -367,7 +436,7 @@ export default function CheckoutPage() {
                                     </>
                                 ) : (
                                     <>
-                                        {isPostpaidUser ? "Place Postpaid Order" : "Authorize Payment"}
+                                        {selectedPaymentMethod === "postpaid" ? "Place Postpaid Order" : "Authorize Payment"}
                                         <CheckCircle2 size={24} />
                                     </>
                                 )}
@@ -380,7 +449,7 @@ export default function CheckoutPage() {
                             )}
 
                             <p className="mt-6 text-center text-[10px] font-black uppercase tracking-[0.2em] text-white/30">
-                                {isPostpaidUser ? "Order will be billed to your active credit cycle" : "Secure Transaction via SSL"}
+                                {selectedPaymentMethod === "postpaid" ? "Order will be billed to your active credit cycle" : "Secure Transaction via SSL"}
                             </p>
                         </section>
                     </div>

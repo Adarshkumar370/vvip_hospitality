@@ -1,0 +1,57 @@
+-- Product categories used for storefront filtering and visual grouping.
+-- A category can be hidden without deleting historical product/category links.
+
+CREATE TABLE IF NOT EXISTS product_categories (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    parent_category_id uuid REFERENCES product_categories(id) ON DELETE SET NULL,
+    name citext NOT NULL,
+    slug varchar(120) NOT NULL,
+    short_description text,
+    image_url text,
+    icon_url text,
+    display_order integer NOT NULL DEFAULT 0,
+    status catalog_visibility_status NOT NULL DEFAULT 'show',
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    version bigint NOT NULL DEFAULT 1,
+
+    CONSTRAINT chk_product_categories_name
+        CHECK (length(btrim(name::text)) > 0),
+    CONSTRAINT chk_product_categories_slug
+        CHECK (slug ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$'),
+    CONSTRAINT chk_product_categories_short_description
+        CHECK (short_description IS NULL OR length(btrim(short_description)) > 0),
+    CONSTRAINT chk_product_categories_image_url
+        CHECK (image_url IS NULL OR length(btrim(image_url)) > 0),
+    CONSTRAINT chk_product_categories_icon_url
+        CHECK (icon_url IS NULL OR length(btrim(icon_url)) > 0),
+    CONSTRAINT chk_product_categories_not_own_parent
+        CHECK (parent_category_id IS NULL OR parent_category_id <> id)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_product_categories_name
+    ON product_categories (name);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_product_categories_slug
+    ON product_categories (slug);
+
+CREATE INDEX IF NOT EXISTS ix_product_categories_visual_filter
+    ON product_categories (status, display_order, name);
+
+CREATE INDEX IF NOT EXISTS ix_product_categories_parent
+    ON product_categories (parent_category_id);
+
+DROP TRIGGER IF EXISTS trg_product_categories_set_updated_at ON product_categories;
+
+CREATE TRIGGER trg_product_categories_set_updated_at
+BEFORE UPDATE ON product_categories
+FOR EACH ROW
+EXECUTE FUNCTION set_updated_at_and_version();
+
+DROP TRIGGER IF EXISTS trg_product_categories_outbox ON product_categories;
+
+CREATE TRIGGER trg_product_categories_outbox
+AFTER INSERT OR UPDATE OR DELETE ON product_categories
+FOR EACH ROW
+EXECUTE FUNCTION publish_row_change_to_outbox();
+

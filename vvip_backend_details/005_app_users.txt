@@ -1,0 +1,77 @@
+-- Main user table.
+-- Stores one row per user and only account-level unique data.
+
+CREATE TABLE IF NOT EXISTS app_users (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    first_name varchar(100) NOT NULL,
+    last_name varchar(100),
+    email citext,
+    mobile_no varchar(20) NOT NULL,
+    status user_status NOT NULL DEFAULT 'allowed',
+    payment_type user_payment_type NOT NULL DEFAULT 'prepaid_user',
+    email_verified_at timestamptz,
+    mobile_verified_at timestamptz,
+    email_verified boolean GENERATED ALWAYS AS (email_verified_at IS NOT NULL) STORED,
+    mobile_verified boolean GENERATED ALWAYS AS (mobile_verified_at IS NOT NULL) STORED,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    version bigint NOT NULL DEFAULT 1,
+
+    CONSTRAINT chk_app_users_first_name_not_blank
+        CHECK (length(btrim(first_name)) > 0),
+    CONSTRAINT chk_app_users_last_name_not_blank
+        CHECK (last_name IS NULL OR length(btrim(last_name)) > 0),
+    CONSTRAINT chk_app_users_email_not_blank
+        CHECK (email IS NULL OR length(btrim(email::text)) > 0),
+    CONSTRAINT chk_app_users_mobile_no_format
+        CHECK (mobile_no ~ '^\+[1-9][0-9]{7,14}$')
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_app_users_email
+    ON app_users (email)
+    WHERE email IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_app_users_mobile_no
+    ON app_users (mobile_no);
+
+CREATE INDEX IF NOT EXISTS ix_app_users_status
+    ON app_users (status);
+
+CREATE OR REPLACE FUNCTION app_users_clear_contact_verification()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF NEW.email IS DISTINCT FROM OLD.email THEN
+        NEW.email_verified_at := NULL;
+    END IF;
+
+    IF NEW.mobile_no IS DISTINCT FROM OLD.mobile_no THEN
+        NEW.mobile_verified_at := NULL;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_app_users_clear_contact_verification ON app_users;
+
+CREATE TRIGGER trg_app_users_clear_contact_verification
+BEFORE UPDATE OF email, mobile_no ON app_users
+FOR EACH ROW
+EXECUTE FUNCTION app_users_clear_contact_verification();
+
+DROP TRIGGER IF EXISTS trg_app_users_set_updated_at ON app_users;
+
+CREATE TRIGGER trg_app_users_set_updated_at
+BEFORE UPDATE ON app_users
+FOR EACH ROW
+EXECUTE FUNCTION set_updated_at_and_version();
+
+DROP TRIGGER IF EXISTS trg_app_users_outbox ON app_users;
+
+CREATE TRIGGER trg_app_users_outbox
+AFTER INSERT OR UPDATE ON app_users
+FOR EACH ROW
+EXECUTE FUNCTION publish_row_change_to_outbox();
+

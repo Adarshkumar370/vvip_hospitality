@@ -1,0 +1,98 @@
+-- Optional flexible metadata values.
+-- Do not use this table for address, payment type, email, mobile, verification,
+-- or other important operational data.
+
+CREATE TABLE IF NOT EXISTS user_attributes (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id uuid NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+    attribute_definition_id uuid NOT NULL REFERENCES user_attribute_definitions(id) ON DELETE RESTRICT,
+    value_text text,
+    value_number numeric(14, 4),
+    value_boolean boolean,
+    value_date date,
+    value_json jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    version bigint NOT NULL DEFAULT 1,
+
+    CONSTRAINT chk_user_attributes_one_value
+        CHECK (
+            num_nonnulls(value_text, value_number, value_boolean, value_date, value_json) = 1
+        )
+);
+
+CREATE INDEX IF NOT EXISTS ix_user_attributes_user_id
+    ON user_attributes (user_id);
+
+CREATE INDEX IF NOT EXISTS ix_user_attributes_definition_id
+    ON user_attributes (attribute_definition_id);
+
+CREATE OR REPLACE FUNCTION user_attributes_validate_definition()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_definition user_attribute_definitions%ROWTYPE;
+BEGIN
+    SELECT *
+    INTO v_definition
+    FROM user_attribute_definitions
+    WHERE id = NEW.attribute_definition_id;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'attribute definition % does not exist', NEW.attribute_definition_id;
+    END IF;
+
+    IF v_definition.is_active = false THEN
+        RAISE EXCEPTION 'attribute definition % is inactive', v_definition.code;
+    END IF;
+
+    IF v_definition.allows_multiple = false
+        AND EXISTS (
+            SELECT 1
+            FROM user_attributes
+            WHERE user_id = NEW.user_id
+              AND attribute_definition_id = NEW.attribute_definition_id
+              AND id <> NEW.id
+        )
+    THEN
+        RAISE EXCEPTION 'attribute definition % does not allow multiple values', v_definition.code;
+    END IF;
+
+    IF v_definition.data_type = 'text' AND NEW.value_text IS NULL THEN
+        RAISE EXCEPTION 'attribute definition % requires value_text', v_definition.code;
+    ELSIF v_definition.data_type = 'number' AND NEW.value_number IS NULL THEN
+        RAISE EXCEPTION 'attribute definition % requires value_number', v_definition.code;
+    ELSIF v_definition.data_type = 'boolean' AND NEW.value_boolean IS NULL THEN
+        RAISE EXCEPTION 'attribute definition % requires value_boolean', v_definition.code;
+    ELSIF v_definition.data_type = 'date' AND NEW.value_date IS NULL THEN
+        RAISE EXCEPTION 'attribute definition % requires value_date', v_definition.code;
+    ELSIF v_definition.data_type = 'json' AND NEW.value_json IS NULL THEN
+        RAISE EXCEPTION 'attribute definition % requires value_json', v_definition.code;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_user_attributes_validate_definition ON user_attributes;
+
+CREATE TRIGGER trg_user_attributes_validate_definition
+BEFORE INSERT OR UPDATE ON user_attributes
+FOR EACH ROW
+EXECUTE FUNCTION user_attributes_validate_definition();
+
+DROP TRIGGER IF EXISTS trg_user_attributes_set_updated_at ON user_attributes;
+
+CREATE TRIGGER trg_user_attributes_set_updated_at
+BEFORE UPDATE ON user_attributes
+FOR EACH ROW
+EXECUTE FUNCTION set_updated_at_and_version();
+
+DROP TRIGGER IF EXISTS trg_user_attributes_outbox ON user_attributes;
+
+CREATE TRIGGER trg_user_attributes_outbox
+AFTER INSERT OR UPDATE OR DELETE ON user_attributes
+FOR EACH ROW
+EXECUTE FUNCTION publish_row_change_to_outbox();
+

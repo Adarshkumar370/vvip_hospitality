@@ -22,7 +22,9 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { RupeeAmount } from "@/components/ui/RupeeAmount";
 import { useAuth } from "@/context/AuthContext";
+import { useCart } from "@/context/CartContext";
 import {
     updateUserDetails,
     getAddresses,
@@ -30,13 +32,57 @@ import {
     updateAddress,
     deleteAddress,
     getUserOrders,
-    retryInvoiceGeneration
+    retryInvoiceGeneration,
+    createRazorpayOrder,
+    verifyRazorpayPayment,
+    validatePendingOrderForPayment,
 } from "@/app/bakery/actions";
 
 type Tab = "profile" | "addresses" | "orders";
 
+declare global {
+    interface Window {
+        Razorpay: new (options: {
+            key?: string;
+            amount: number;
+            currency: string;
+            name: string;
+            description: string;
+            order_id: string;
+            handler: (response: {
+                razorpay_order_id: string;
+                razorpay_payment_id: string;
+                razorpay_signature: string;
+            }) => Promise<void>;
+            prefill: {
+                name: string;
+                email: string;
+                contact: string;
+            };
+            theme: {
+                color: string;
+            };
+            modal: {
+                ondismiss: () => void;
+            };
+        }) => { open: () => void };
+    }
+}
+
+function formatInvoiceDisplayNumber(invoiceNumber?: string | null) {
+    if (!invoiceNumber) return "";
+    const match = invoiceNumber.match(/^([A-Z]+-)(\d+)$/i);
+    if (!match) return invoiceNumber;
+    return `${match[1]}${Number(match[2])}`;
+}
+
+function isOperationallyClearedPayment(status: string) {
+    return status === "paid" || status === "postpaid-pending";
+}
+
 export default function SettingsPage() {
     const { user, login, logout, isLoading: isAuthLoading } = useAuth();
+    const { addToCart, clearCart } = useCart();
     const router = useRouter();
     const [activeTab, setActiveTab] = useState<Tab>("profile");
     const [isSaving, setIsSaving] = useState(false);
@@ -64,6 +110,18 @@ export default function SettingsPage() {
     const [isLoadingData, setIsLoadingData] = useState(false);
     const [orderTab, setOrderTab] = useState<"ongoing" | "pending" | "completed">("ongoing");
     const [generatingInvoice, setGeneratingInvoice] = useState<string | null>(null);
+    const [payingOrderId, setPayingOrderId] = useState<string | null>(null);
+    const [repeatingOrderId, setRepeatingOrderId] = useState<string | null>(null);
+
+    useEffect(() => {
+        const script = document.createElement("script");
+        script.src = "https://checkout.razorpay.com/v1/checkout.js";
+        script.async = true;
+        document.body.appendChild(script);
+        return () => {
+            document.body.removeChild(script);
+        };
+    }, []);
 
     useEffect(() => {
         if (!isAuthLoading && !user) {
@@ -110,6 +168,97 @@ export default function SettingsPage() {
             setTimeout(() => setMessage(null), 3000);
         }
         setGeneratingInvoice(null);
+    };
+
+    const handleContinueToPayment = async (order: any) => {
+        if (!user) return;
+        setPayingOrderId(order.id);
+        setMessage(null);
+
+        try {
+            const validation = await validatePendingOrderForPayment(order.id, String(user.id));
+            if (!validation.success) {
+                throw new Error(validation.error || "Could not verify the pending order.");
+            }
+            if (!validation.allowed) {
+                throw new Error(validation.violations[0]?.error || "Daily product limit exceeded.");
+            }
+
+            const razorpayRes = await createRazorpayOrder(Number(order.total_price || 0), order.id);
+            if (!razorpayRes.success) {
+                throw new Error(razorpayRes.error || "Failed to initialize payment");
+            }
+
+            const options = {
+                key: razorpayRes.keyId || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+                amount: razorpayRes.amount,
+                currency: "INR",
+                name: "Swiss Affaire - The Bake Studio",
+                description: "Pending Order Payment",
+                order_id: razorpayRes.orderId,
+                handler: async (response: {
+                    razorpay_order_id: string;
+                    razorpay_payment_id: string;
+                    razorpay_signature: string;
+                }) => {
+                    const verifyRes = await verifyRazorpayPayment(
+                        order.id,
+                        response.razorpay_order_id,
+                        response.razorpay_payment_id,
+                        response.razorpay_signature
+                    );
+
+                    if (verifyRes.success) {
+                        await loadInitialData();
+                        setMessage({ type: "success", text: "Payment completed successfully." });
+                    } else {
+                        setMessage({ type: "error", text: verifyRes.error || "Payment verification failed." });
+                    }
+                    setPayingOrderId(null);
+                },
+                prefill: {
+                    name: user.name,
+                    email: user.email,
+                    contact: user.phone,
+                },
+                theme: {
+                    color: "#344B33",
+                },
+                modal: {
+                    ondismiss: () => {
+                        setPayingOrderId(null);
+                    },
+                },
+            };
+
+            const rzp = new window.Razorpay(options);
+            rzp.open();
+        } catch (err: unknown) {
+            setMessage({ type: "error", text: err instanceof Error ? err.message : "Could not continue to payment." });
+            setPayingOrderId(null);
+        }
+    };
+
+    const handleRepeatOrder = async (order: any) => {
+        setRepeatingOrderId(order.id);
+        try {
+            clearCart();
+            order.items.forEach((item: any) => {
+                addToCart(
+                    {
+                        id: item.product_id,
+                        name: item.product_name,
+                        price: Number(item.price_at_time || 0),
+                        image: item.product_image,
+                        category: item.category || "Bakery",
+                    },
+                    Number(item.quantity || 1)
+                );
+            });
+            router.push("/bakery/order");
+        } finally {
+            setRepeatingOrderId(null);
+        }
     };
 
     const handleProfileUpdate = async (e: React.FormEvent) => {
@@ -420,7 +569,7 @@ export default function SettingsPage() {
                                         <div className="space-y-6">
                                             {orders.filter((order) => {
                                                 if (orderTab === "pending") return order.payment_status === "pending";
-                                                if (orderTab === "ongoing") return order.payment_status === "paid" && (order.status === "pending" || order.status === "preparing" || order.status === "prepared" || order.status === "in transit");
+                                                if (orderTab === "ongoing") return isOperationallyClearedPayment(order.payment_status) && (order.status === "pending" || order.status === "preparing" || order.status === "prepared" || order.status === "in transit");
                                                 if (orderTab === "completed") return order.status === "delivered" || order.status === "cancelled";
                                                 return true;
                                             }).length === 0 ? (
@@ -431,7 +580,7 @@ export default function SettingsPage() {
                                             ) : (
                                                 orders.filter((order) => {
                                                     if (orderTab === "pending") return order.payment_status === "pending";
-                                                    if (orderTab === "ongoing") return order.payment_status === "paid" && (order.status === "pending" || order.status === "preparing" || order.status === "prepared" || order.status === "in transit");
+                                                    if (orderTab === "ongoing") return isOperationallyClearedPayment(order.payment_status) && (order.status === "pending" || order.status === "preparing" || order.status === "prepared" || order.status === "in transit");
                                                     if (orderTab === "completed") return order.status === "delivered" || order.status === "cancelled";
                                                     return true;
                                                 }).map((order) => (
@@ -448,6 +597,8 @@ export default function SettingsPage() {
                                                                         "text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border",
                                                                         order.payment_status === 'paid'
                                                                             ? "bg-green-100 text-green-700 border-green-200"
+                                                                            : order.payment_status === 'postpaid-pending'
+                                                                                ? "bg-yellow-100 text-yellow-800 border-yellow-200"
                                                                             : "bg-orange-100 text-orange-700 border-orange-200"
                                                                     )}>
                                                                         {order.payment_status}
@@ -455,7 +606,9 @@ export default function SettingsPage() {
                                                                 </div>
                                                                 <div className="text-right">
                                                                     <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Total</p>
-                                                                    <p className="text-sm font-black text-brand-gold-bright">₹{order.total_price}</p>
+                                                                    <p className="text-sm font-black text-brand-gold-bright">
+                                                                        <RupeeAmount value={order.total_price} />
+                                                                    </p>
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -469,9 +622,9 @@ export default function SettingsPage() {
                                                                 >
                                                                     <Download size={14} aria-hidden="true" />
                                                                     Download Invoice
-                                                                    {order.invoice_number ? ` ${order.invoice_number}` : ""}
+                                                                    {order.invoice_number ? ` ${formatInvoiceDisplayNumber(order.invoice_number)}` : ""}
                                                                 </a>
-                                                            ) : order.payment_status === 'paid' && (
+                                                            ) : isOperationallyClearedPayment(order.payment_status) && (
                                                                 <button
                                                                     onClick={() => handleGenerateInvoice(order.id)}
                                                                     disabled={generatingInvoice === order.id}
@@ -480,6 +633,19 @@ export default function SettingsPage() {
                                                                     {generatingInvoice === order.id
                                                                         ? <><Loader2 size={14} className="animate-spin" aria-hidden="true" /> Download Invoice</>
                                                                         : <><Download size={14} aria-hidden="true" /> Download Invoice</>
+                                                                    }
+                                                                </button>
+                                                            )}
+
+                                                            {isOperationallyClearedPayment(order.payment_status) && (
+                                                                <button
+                                                                    onClick={() => handleRepeatOrder(order)}
+                                                                    disabled={repeatingOrderId === order.id}
+                                                                    className="ml-3 inline-flex items-center gap-2 rounded-xl border border-brand-olive-dark/10 bg-white px-4 py-3 text-[10px] font-black uppercase tracking-widest text-brand-olive-dark shadow-sm transition-all hover:border-brand-gold-bright hover:text-brand-gold-bright disabled:cursor-not-allowed disabled:opacity-50"
+                                                                >
+                                                                    {repeatingOrderId === order.id
+                                                                        ? <><Loader2 size={14} className="animate-spin" aria-hidden="true" /> Repeat Order</>
+                                                                        : <><Package size={14} aria-hidden="true" /> Repeat Order</>
                                                                     }
                                                                 </button>
                                                             )}
@@ -493,61 +659,90 @@ export default function SettingsPage() {
                                                                 ))}
                                                             </div>
 
-                                                            {/* Tracker */}
-                                                            <div className="pt-4">
-                                                                <div className="flex justify-between items-center relative mb-2">
-                                                                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-0.5 bg-gray-100 -z-10" />
-                                                                    {[
-                                                                        { s: "pending", i: Clock, label: "PLACED" },
-                                                                        { s: "preparing", i: Package, label: "PREP" },
-                                                                        { s: "prepared", i: CheckCircle2, label: "READY" },
-                                                                        { s: "delivered", i: Truck, label: "OUT" }
-                                                                    ].map((step, idx, arr) => {
-                                                                        const getStatusRank = (status: string) => {
-                                                                            switch (status) {
-                                                                                case "pending": return 0;
-                                                                                case "preparing": return 1;
-                                                                                case "prepared": return 2;
-                                                                                case "in transit":
-                                                                                case "delivered": return 3;
-                                                                                default: return -1;
+                                                            {orderTab === "pending" ? (
+                                                                <div className="rounded-2xl bg-brand-soft-gray/50 p-4">
+                                                                    <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-gray-400">
+                                                                        Awaiting Payment Confirmation
+                                                                    </p>
+                                                                    <div className="flex flex-wrap gap-3">
+                                                                        <button
+                                                                            onClick={() => handleContinueToPayment(order)}
+                                                                            disabled={payingOrderId === order.id}
+                                                                            className="inline-flex items-center gap-2 rounded-xl bg-brand-olive-dark px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white shadow-sm transition-all hover:bg-brand-gold-bright hover:text-brand-olive-dark disabled:cursor-not-allowed disabled:opacity-50"
+                                                                        >
+                                                                            {payingOrderId === order.id
+                                                                                ? <><Loader2 size={14} className="animate-spin" aria-hidden="true" /> Continue to Payment</>
+                                                                                : <><Clock size={14} aria-hidden="true" /> Continue to Payment</>
                                                                             }
-                                                                        };
-                                                                        const currentRank = getStatusRank(order.status);
-                                                                        const isCompleted = idx <= currentRank;
-                                                                        const isActive = idx === currentRank;
-
-                                                                        return (
-                                                                            <div key={step.label} className="flex items-center">
-                                                                                <div className="flex flex-col items-center gap-2">
-                                                                                    <div className={cn(
-                                                                                        "w-8 h-8 rounded-full flex items-center justify-center transition-all border-2",
-                                                                                        isCompleted
-                                                                                            ? "bg-brand-gold-bright border-brand-gold-bright text-white shadow-lg"
-                                                                                            : "bg-white border-gray-200 text-gray-300",
-                                                                                        isActive && "scale-110"
-                                                                                    )}>
-                                                                                        <step.i size={14} aria-hidden="true" />
-                                                                                    </div>
-                                                                                    <span className={cn(
-                                                                                        "text-[8px] font-black uppercase tracking-widest",
-                                                                                        isCompleted ? "text-brand-olive-dark" : "text-gray-400"
-                                                                                    )}>{step.label}</span>
-                                                                                </div>
-                                                                                {idx < arr.length - 1 && (
-                                                                                    <ChevronRight
-                                                                                        size={16}
-                                                                                        className={cn(
-                                                                                            "mx-1 md:mx-4 mb-5",
-                                                                                            idx < currentRank ? "text-brand-gold-bright" : "text-gray-200"
-                                                                                        )}
-                                                                                    />
-                                                                                )}
-                                                                            </div>
-                                                                        );
-                                                                    })}
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => handleRepeatOrder(order)}
+                                                                            disabled={repeatingOrderId === order.id}
+                                                                            className="inline-flex items-center gap-2 rounded-xl border border-brand-olive-dark/10 bg-white px-4 py-3 text-[10px] font-black uppercase tracking-widest text-brand-olive-dark shadow-sm transition-all hover:border-brand-gold-bright hover:text-brand-gold-bright disabled:cursor-not-allowed disabled:opacity-50"
+                                                                        >
+                                                                            {repeatingOrderId === order.id
+                                                                                ? <><Loader2 size={14} className="animate-spin" aria-hidden="true" /> Repeat Order</>
+                                                                                : <><Package size={14} aria-hidden="true" /> Repeat Order</>
+                                                                            }
+                                                                        </button>
+                                                                    </div>
                                                                 </div>
-                                                            </div>
+                                                            ) : (
+                                                                <div className="pt-4">
+                                                                    <div className="flex justify-between items-center relative mb-2">
+                                                                        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-0.5 bg-gray-100 -z-10" />
+                                                                        {[
+                                                                            { s: "pending", i: Clock, label: "PLACED" },
+                                                                            { s: "preparing", i: Package, label: "PREP" },
+                                                                            { s: "prepared", i: CheckCircle2, label: "READY" },
+                                                                            { s: "delivered", i: Truck, label: "OUT" }
+                                                                        ].map((step, idx, arr) => {
+                                                                            const getStatusRank = (status: string) => {
+                                                                                switch (status) {
+                                                                                    case "pending": return 0;
+                                                                                    case "preparing": return 1;
+                                                                                    case "prepared": return 2;
+                                                                                    case "in transit":
+                                                                                    case "delivered": return 3;
+                                                                                    default: return -1;
+                                                                                }
+                                                                            };
+                                                                            const currentRank = getStatusRank(order.status);
+                                                                            const isCompleted = idx <= currentRank;
+                                                                            const isActive = idx === currentRank;
+
+                                                                            return (
+                                                                                <div key={step.label} className="flex items-center">
+                                                                                    <div className="flex flex-col items-center gap-2">
+                                                                                        <div className={cn(
+                                                                                            "w-8 h-8 rounded-full flex items-center justify-center transition-all border-2",
+                                                                                            isCompleted
+                                                                                                ? "bg-brand-gold-bright border-brand-gold-bright text-white shadow-lg"
+                                                                                                : "bg-white border-gray-200 text-gray-300",
+                                                                                            isActive && "scale-110"
+                                                                                        )}>
+                                                                                            <step.i size={14} aria-hidden="true" />
+                                                                                        </div>
+                                                                                        <span className={cn(
+                                                                                            "text-[8px] font-black uppercase tracking-widest",
+                                                                                            isCompleted ? "text-brand-olive-dark" : "text-gray-400"
+                                                                                        )}>{step.label}</span>
+                                                                                    </div>
+                                                                                    {idx < arr.length - 1 && (
+                                                                                        <ChevronRight
+                                                                                            size={16}
+                                                                                            className={cn(
+                                                                                                "mx-1 md:mx-4 mb-5",
+                                                                                                idx < currentRank ? "text-brand-gold-bright" : "text-gray-200"
+                                                                                            )}
+                                                                                        />
+                                                                                    )}
+                                                                                </div>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 ))

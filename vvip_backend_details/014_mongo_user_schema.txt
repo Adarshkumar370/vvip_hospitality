@@ -1,0 +1,91 @@
+MongoDB user projection
+=======================
+
+Collection: users
+
+Purpose
+-------
+Denormalized user document for fast reads and failover recovery. PostgreSQL
+remains the source of truth. MongoDB records should be written from
+outbox_events, not directly from the web frontend.
+
+Document shape
+--------------
+{
+  "_id": "<app_users.id>",
+  "first_name": "Amit",
+  "last_name": "Sharma",
+  "email": "amit@example.com",
+  "mobile_no": "+919999999999",
+  "status": "allowed",
+  "payment_type": "prepaid_user",
+  "email_verified": true,
+  "email_verified_at": "2026-05-18T10:30:00Z",
+  "mobile_verified": true,
+  "mobile_verified_at": "2026-05-18T10:25:00Z",
+  "addresses": [
+    {
+      "id": "<user_addresses.id>",
+      "address_label": "home",
+      "recipient_name": "Amit Sharma",
+      "recipient_mobile_no": "+919999999999",
+      "line1": "Flat 101, Example Residency",
+      "line2": "MG Road",
+      "landmark": "Near metro station",
+      "city": "Bengaluru",
+      "state": "Karnataka",
+      "postal_code": "560001",
+      "country_code": "IN",
+      "latitude": 12.9716,
+      "longitude": 77.5946,
+      "delivery_instructions": "Call before delivery",
+      "is_default": true,
+      "is_active": true,
+      "postgres_version": 1,
+      "postgres_updated_at": "2026-05-18T10:35:00Z"
+    }
+  ],
+  "default_address_id": "<user_addresses.id>",
+  "billing_profile": {
+    "id": "<user_billing_profiles.id>",
+    "billing_status": "active",
+    "credit_limit": "5000.00",
+    "current_balance": "0.00",
+    "billing_cycle_day": 1,
+    "payment_terms_days": 7,
+    "invoice_email": "billing@example.com",
+    "tax_name": null,
+    "tax_id": null,
+    "postgres_version": 1,
+    "postgres_updated_at": "2026-05-18T10:35:00Z"
+  },
+  "attributes": {
+    "preferred_flavor": ["chocolate"],
+    "allergy_note": ["no nuts"]
+  },
+  "can_order": true,
+  "order_block_reason": null,
+  "postgres_version": 1,
+  "postgres_updated_at": "2026-05-18T10:35:00Z",
+  "last_event_id": "<outbox_events.id>",
+  "checksum": "<sha256 hash of canonical projection payload>",
+  "synced_at": "2026-05-18T10:35:02Z"
+}
+
+Recommended indexes
+-------------------
+db.users.createIndex({ mobile_no: 1 }, { unique: true })
+db.users.createIndex({ email: 1 }, { unique: true, sparse: true })
+db.users.createIndex({ status: 1, payment_type: 1 })
+db.users.createIndex({ "addresses.postal_code": 1 })
+db.users.createIndex({ last_event_id: 1 }, { unique: true })
+
+Sync rules
+----------
+- Use outbox_events.id as last_event_id.
+- Ignore duplicate events if last_event_id already exists.
+- Store PostgreSQL version and updated_at for each embedded object.
+- Recalculate checksum after every projection update.
+- If checksum mismatch is found during reconciliation, rebuild the MongoDB
+  document from PostgreSQL.
+

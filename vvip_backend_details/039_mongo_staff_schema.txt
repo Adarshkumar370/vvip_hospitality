@@ -1,0 +1,48 @@
+MongoDB staff/permission projection
+===================================
+
+Collections
+-----------
+- staff_members
+- permissions
+- staff_permissions
+
+Purpose
+-------
+Denormalized employee and permission documents for admin screens and failover
+reads. PostgreSQL remains the source of truth. MongoDB records should be
+updated from outbox_events.
+
+staff_members document
+----------------------
+{
+  "_id": "<staff_members.id>",
+  "employee_code": "EMP-000001",
+  "staff_name": "Priya Sharma",
+  "mobile_no": "+919999999999",
+  "email": "priya@example.com",
+  "designation": "manager",
+  "status": "active",
+  "permissions": [
+    "mark_order_preparing",
+    "mark_order_ready"
+  ],
+  "postgres_version": 1,
+  "postgres_updated_at": "2026-05-18T10:35:00Z",
+  "last_event_id": "<outbox_events.id>",
+  "checksum": "<sha256 hash of canonical projection payload>",
+  "synced_at": "2026-05-18T10:35:02Z"
+}
+
+Recommended indexes
+-------------------
+db.staff_members.createIndex({ employee_code: 1 }, { unique: true })
+db.staff_members.createIndex({ mobile_no: 1 }, { unique: true })
+db.staff_members.createIndex({ email: 1 }, { unique: true, sparse: true })
+db.staff_members.createIndex({ designation: 1, status: 1 })
+db.staff_members.createIndex({ last_event_id: 1 }, { unique: true })
+
+db.permissions.createIndex({ permission_code: 1 }, { unique: true })
+db.staff_permissions.createIndex({ staff_id: 1, permission_code: 1 })
+
+

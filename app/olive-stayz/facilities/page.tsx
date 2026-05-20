@@ -6,6 +6,7 @@ import OliveStayzFooter from "@/components/olive-stayz/Footer";
 import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
+import { RupeeAmount } from "@/components/ui/RupeeAmount";
 import { 
     FaWifi, FaBuilding, FaUtensils, FaCar, FaBolt, FaWheelchair, 
     FaUserTie, FaBroom, FaCamera, FaShieldAlt, FaFireExtinguisher, 
@@ -188,7 +189,9 @@ export default function FacilitiesPage() {
                                 >
                                     <div className="flex justify-between items-start mb-6">
                                         <h4 className="text-2xl font-black uppercase tracking-tighter">{meal.type}</h4>
-                                        <div className="text-[#C5A04D] font-black text-xl">{meal.price}</div>
+                                        <div className="text-[#C5A04D] font-black text-xl">
+                                            <RupeeAmount value={meal.price} />
+                                        </div>
                                     </div>
                                     <p className="text-gray-500 mb-6 text-sm flex-grow">{meal.desc}</p>
                                     <ul className="space-y-3">
@@ -271,13 +274,13 @@ const FACILITIES_DATA = [
 const MEAL_PLANS = [
     {
         type: "Breakfast",
-        price: "₹350",
+        price: "350",
         desc: "Opt for a freshly prepared hot dish served with your choice of tea, coffee, fresh bread, and cereal.",
         features: ["Flexible Timings", "1 Hot Dish Opt", "Tea/Coffee Included"]
     },
     {
         type: "Lunch / Dinner",
-        price: "₹450",
+        price: "450",
         desc: "Wholesome meals including a hot dish served with fresh Roti and Salad. Pure Veg options available.",
         features: ["Flexible Timings", "Hot Serving", "Roti & Salad Incl."]
     }

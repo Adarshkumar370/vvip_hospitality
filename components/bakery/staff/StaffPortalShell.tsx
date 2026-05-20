@@ -24,6 +24,7 @@ import {
     Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { RupeeAmount } from "@/components/ui/RupeeAmount";
 import { getOrders, getProducts, getStaffSession, logoutStaff, retryStaffInvoiceGeneration, staffLogin, updateOrderStatus, updateProductDailyLimitForStaff } from "@/app/bakery/actions";
 
 type StaffRole = "baker" | "delivery" | "manager" | "accountant" | "admin";
@@ -80,6 +81,10 @@ type ProductRecord = {
 
 const ORDERS_PER_PAGE = 50;
 const ACCOUNTANT_FILTER_DAYS = [1, 7, 30] as const;
+
+function isOperationallyClearedPayment(status: string) {
+    return status === "paid" || status === "postpaid-pending";
+}
 
 function getDisplayOrderNumber(order: OrderRecord) {
     if (order.order_number) {
@@ -600,11 +605,11 @@ function StaffDashboard({
     );
 
     const tabbedOrders = useMemo(() => {
-        const paidOrders = orders.filter((order) => order.payment_status === "paid");
+        const clearedOrders = orders.filter((order) => isOperationallyClearedPayment(order.payment_status));
 
         if (staff.role === "admin" || staff.role === "manager" || staff.role === "accountant") {
             return {
-                pending: staff.role === "accountant" ? accountantOrders : paidOrders,
+                pending: staff.role === "accountant" ? accountantOrders : clearedOrders,
                 active: [],
                 completed: [],
             };
@@ -612,17 +617,17 @@ function StaffDashboard({
 
         if (staff.role === "baker") {
             return {
-                pending: paidOrders.filter((order) => order.status === "pending"),
-                active: paidOrders.filter((order) => order.status === "preparing" && order.acknowledged_by === staff.id),
-                completed: paidOrders.filter((order) => order.status === "prepared" && order.acknowledged_by === staff.id),
+                pending: clearedOrders.filter((order) => order.status === "pending"),
+                active: clearedOrders.filter((order) => order.status === "preparing" && order.acknowledged_by === staff.id),
+                completed: clearedOrders.filter((order) => order.status === "prepared" && order.acknowledged_by === staff.id),
             };
         }
 
         if (staff.role === "delivery") {
             return {
-                pending: paidOrders.filter((order) => order.status === "prepared"),
-                active: paidOrders.filter((order) => order.status === "in transit" && order.acknowledged_by === staff.id),
-                completed: paidOrders.filter((order) => order.status === "delivered" && order.acknowledged_by === staff.id),
+                pending: clearedOrders.filter((order) => order.status === "prepared"),
+                active: clearedOrders.filter((order) => order.status === "in transit" && order.acknowledged_by === staff.id),
+                completed: clearedOrders.filter((order) => order.status === "delivered" && order.acknowledged_by === staff.id),
             };
         }
 
@@ -704,7 +709,7 @@ function StaffDashboard({
                         </p>
                         <h3 className="text-4xl font-serif font-black text-white">
                             {staff.role === "accountant" || staff.role === "admin" || staff.role === "manager"
-                                ? orders.filter((order) => order.payment_status === "paid").length
+                                ? orders.filter((order) => isOperationallyClearedPayment(order.payment_status)).length
                                 : stats.pending}
                             {staff.role === "baker" || staff.role === "delivery" ? " New" : ""}
                         </h3>
@@ -734,7 +739,9 @@ function StaffDashboard({
                     <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
                         <div className="rounded-[2.5rem] bg-white p-8 shadow-premium">
                             <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-gray-400">Collection In Range</p>
-                            <h3 className="text-4xl font-serif font-black text-brand-olive-dark">Rs. {filteredCollection.toFixed(2)}</h3>
+                            <h3 className="text-4xl font-serif font-black text-brand-olive-dark">
+                                <RupeeAmount value={filteredCollection.toFixed(2)} />
+                            </h3>
                         </div>
                         <div className="rounded-[2.5rem] bg-white p-8 shadow-premium">
                             <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-gray-400">Invoices In Range</p>

@@ -1,0 +1,7 @@
+-- Required PostgreSQL extensions for the user module.
+-- pgcrypto: gen_random_uuid(), digest()
+-- citext: case-insensitive email storage and comparison
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS citext;
+
