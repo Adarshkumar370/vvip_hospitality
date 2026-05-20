@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { usePathname } from "next/navigation";
 import { AuthProvider } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
@@ -19,7 +20,11 @@ export default function BakeryLayout({
         <AuthProvider>
             <CartProvider>
                 <div className="min-h-screen">
-                    {!hideNavbar && <BakeryNavbar />}
+                    {!hideNavbar && (
+                        <Suspense fallback={null}>
+                            <BakeryNavbar />
+                        </Suspense>
+                    )}
                     <main>{children}</main>
                 </div>
             </CartProvider>
