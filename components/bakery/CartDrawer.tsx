@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, ShoppingBag, Plus, Minus, Trash2, ArrowRight, AlertCircle, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/context/CartContext";
+import { useAuth } from "@/context/AuthContext";
 import { validateCartProductLimits } from "@/app/bakery/actions";
 import { RupeeAmount } from "@/components/ui/RupeeAmount";
 import Image from "next/image";
@@ -12,10 +13,12 @@ import Image from "next/image";
 interface CartDrawerProps {
     isOpen: boolean;
     onClose: () => void;
+    onRequireAuth?: (redirectTo: string) => void;
 }
 
-export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
+export default function CartDrawer({ isOpen, onClose, onRequireAuth }: CartDrawerProps) {
     const { cart, removeFromCart, updateQuantity, totalPrice, totalItems } = useCart();
+    const { user, logout } = useAuth();
     const router = useRouter();
     const [checkoutError, setCheckoutError] = useState<string | null>(null);
     const [isCheckingOut, setIsCheckingOut] = useState(false);
@@ -33,11 +36,25 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
 
     const handleProceedToCheckout = async () => {
         setCheckoutError(null);
+
+        if (!user) {
+            onClose();
+            onRequireAuth?.("/bakery/checkout");
+            return;
+        }
+
         setIsCheckingOut(true);
         const itemsPayload = cart.map((item) => ({ id: item.id, quantity: item.quantity }));
 
         const dailyLimitRes = await validateCartProductLimits(itemsPayload);
         if (!dailyLimitRes.success) {
+            if (dailyLimitRes.error?.toLowerCase().includes("unauthorized")) {
+                logout();
+                onClose();
+                onRequireAuth?.("/bakery/checkout");
+                setIsCheckingOut(false);
+                return;
+            }
             setCheckoutError(dailyLimitRes.error || "Could not verify daily product limits.");
             setIsCheckingOut(false);
             return;

@@ -623,6 +623,10 @@ export async function loginUser(phone: string) {
 
 export async function syncUserSession(user: { id: string | number, name: string, email: string, phone: string }) {
     const session = await getIronSession<UserSessionData>(await cookies(), userSessionOptions);
+    if (!session.user) {
+        return { success: false as const, error: "Session expired. Please log in again." };
+    }
+
     const hydratedUser = await findUserFromSessionIdentity(user);
     if (hydratedUser) {
         session.user = hydratedUser as any;

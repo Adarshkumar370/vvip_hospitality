@@ -13,9 +13,10 @@ import { auth } from "@/lib/firebase/client";
 interface AuthModalProps {
     isOpen: boolean;
     onClose: () => void;
+    redirectTo?: string;
 }
 
-export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
+export default function AuthModal({ isOpen, onClose, redirectTo = "/bakery/order" }: AuthModalProps) {
     const router = useRouter();
     const { login } = useAuth();
     const [phone, setPhone] = useState("");
@@ -170,7 +171,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
         if (result.success && result.user) {
             login(result.user as any);
             onClose();
-            router.push("/bakery/order");
+            router.push(redirectTo);
         } else {
             setStep("signup");
         }
@@ -189,7 +190,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
         if (result.success && result.user) {
             login(result.user as any);
             onClose();
-            router.push("/bakery/order");
+            router.push(redirectTo);
         } else {
             setError(result.error || "Signup failed");
         }

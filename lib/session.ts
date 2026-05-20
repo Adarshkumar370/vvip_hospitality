@@ -56,7 +56,8 @@ export const userSessionOptions: SessionOptions = {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
-        maxAge: 60 * 60 * 24 * 30, // 30 days
+        // 2-day customer session.
+        maxAge: 60 * 60 * 24 * 2 - 60, // subtract 60s buffer
         path: "/",
     },
 };

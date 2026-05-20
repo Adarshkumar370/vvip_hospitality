@@ -9,7 +9,7 @@ export default async function BakeryOrderPage() {
     const user = await getUserSession();
     
     if (!user) {
-        redirect("/bakery");
+        redirect("/bakery?login=1&next=/bakery/order");
     }
 
     // 2. Fetch data (cached for 300s / 5 min in actions.ts)

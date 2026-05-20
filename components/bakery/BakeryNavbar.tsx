@@ -1,7 +1,7 @@
 import { useState, useEffect, useSyncExternalStore } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { ShoppingCart, Settings, LogIn, User as UserIcon, Menu, X, LogOut as LogOutIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -16,6 +16,7 @@ export default function BakeryNavbar() {
     const router = useRouter();
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
     const [isCartOpen, setIsCartOpen] = useState(false);
+    const [authRedirectTo, setAuthRedirectTo] = useState("/bakery/order");
     const [isScrolled, setIsScrolled] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
@@ -25,6 +26,7 @@ export default function BakeryNavbar() {
         () => false
     );
     const pathname = usePathname();
+    const searchParams = useSearchParams();
     const isMainBakeryPage = pathname === "/bakery";
     const showSolidNav = isScrolled || !isMainBakeryPage;
 
@@ -39,6 +41,32 @@ export default function BakeryNavbar() {
         window.addEventListener("scroll", handleScroll);
         return () => window.removeEventListener("scroll", handleScroll);
     }, []);
+
+    useEffect(() => {
+        if (searchParams.get("login") !== "1") return;
+
+        const next = searchParams.get("next");
+        const safeNext = next?.startsWith("/bakery") ? next : "/bakery/order";
+        if (user) {
+            router.replace(safeNext, { scroll: false });
+            return;
+        }
+
+        setAuthRedirectTo(safeNext);
+        setIsAuthModalOpen(true);
+    }, [searchParams, user, router]);
+
+    const openAuthModal = (redirectTo = "/bakery/order") => {
+        setAuthRedirectTo(redirectTo);
+        setIsAuthModalOpen(true);
+    };
+
+    const closeAuthModal = () => {
+        setIsAuthModalOpen(false);
+        if (searchParams.get("login") === "1") {
+            router.replace("/bakery", { scroll: false });
+        }
+    };
 
     const navLinks = [
         { name: "Home", href: "/bakery" },
@@ -183,7 +211,7 @@ export default function BakeryNavbar() {
                             </div>
                         ) : (
                             <button
-                                onClick={() => setIsAuthModalOpen(true)}
+                                onClick={() => openAuthModal("/bakery/order")}
                                 className={cn(
                                     "flex items-center gap-3 px-8 py-3 rounded-full font-black text-[10px] uppercase tracking-[0.2em] transition-all shadow-xl active:scale-95 group",
                                     showSolidNav
@@ -251,7 +279,7 @@ export default function BakeryNavbar() {
                                 </div>
                             ) : (
                                 <button
-                                    onClick={() => { setIsAuthModalOpen(true); setIsMobileMenuOpen(false); }}
+                                    onClick={() => { openAuthModal("/bakery/order"); setIsMobileMenuOpen(false); }}
                                     className="text-left text-xl font-black text-brand-gold-bright uppercase tracking-widest"
                                 >
                                     Login
@@ -264,12 +292,14 @@ export default function BakeryNavbar() {
 
             <AuthModal
                 isOpen={isAuthModalOpen}
-                onClose={() => setIsAuthModalOpen(false)}
+                onClose={closeAuthModal}
+                redirectTo={authRedirectTo}
             />
 
             <CartDrawer
                 isOpen={isCartOpen}
                 onClose={() => setIsCartOpen(false)}
+                onRequireAuth={openAuthModal}
             />
         </>
     );

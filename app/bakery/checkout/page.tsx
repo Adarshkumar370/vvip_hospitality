@@ -71,7 +71,7 @@ interface RazorpayOptions {
 }
 
 export default function CheckoutPage() {
-    const { user, isLoading: isAuthLoading } = useAuth();
+    const { user, logout, isLoading: isAuthLoading } = useAuth();
     const { cart, totalPrice, clearCart } = useCart();
     const router = useRouter();
 
@@ -88,9 +88,19 @@ export default function CheckoutPage() {
         setSelectedPaymentMethod(isPostpaidUser ? "postpaid" : "prepaid");
     }, [isPostpaidUser]);
 
+    const redirectToLogin = () => {
+        logout();
+        router.replace("/bakery?login=1&next=/bakery/checkout");
+    };
+
+    const isAuthError = (message: string) =>
+        message.toLowerCase().includes("unauthorized") ||
+        message.toLowerCase().includes("session") ||
+        message.toLowerCase().includes("log in");
+
     useEffect(() => {
         if (!isAuthLoading && !user) {
-            router.push("/bakery");
+            router.replace("/bakery?login=1&next=/bakery/checkout");
         }
     }, [user, isAuthLoading, router]);
 
@@ -141,11 +151,25 @@ export default function CheckoutPage() {
         try {
             const itemsPayload = cart.map((item) => ({ id: item.id, quantity: item.quantity }));
             const dailyLimitRes = await validateCartProductLimits(itemsPayload);
-            if (!dailyLimitRes.success) throw new Error(dailyLimitRes.error || "Could not verify daily product limits.");
+            if (!dailyLimitRes.success) {
+                const message = dailyLimitRes.error || "Could not verify daily product limits.";
+                if (isAuthError(message)) {
+                    redirectToLogin();
+                    return;
+                }
+                throw new Error(message);
+            }
             if (!dailyLimitRes.allowed) throw new Error(dailyLimitRes.violations[0]?.error || "Daily product limit exceeded.");
 
             const orderRes = await finalizeOrder();
-            if (!orderRes?.success) throw new Error(orderRes?.error || "Failed to place order");
+            if (!orderRes?.success) {
+                const message = orderRes?.error || "Failed to place order";
+                if (isAuthError(message)) {
+                    redirectToLogin();
+                    return;
+                }
+                throw new Error(message);
+            }
 
             if (selectedPaymentMethod === "postpaid" && orderRes.paymentMode === "postpaid") {
                 clearCart();

@@ -125,7 +125,8 @@ export default function SettingsPage() {
 
     useEffect(() => {
         if (!isAuthLoading && !user) {
-            router.push("/bakery");
+            const next = `${window.location.pathname}${window.location.search}`;
+            router.replace(`/bakery?login=1&next=${encodeURIComponent(next)}`);
             return;
         }
         if (user) {
