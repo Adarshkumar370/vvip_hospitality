@@ -1974,9 +1974,15 @@ async function validateDailyProductLimitsInternal(items: { id: string, quantity:
 
     for (const item of items) {
         const [product] = await sql`
-            SELECT id, name, unit, max_daily_limit
-            FROM products
-            WHERE id = ${item.id}
+            SELECT
+                p.id,
+                p.name,
+                COALESCE(mu.symbol, mu.code, 'unit') AS unit,
+                p.max_daily_limit
+            FROM products p
+            LEFT JOIN measurement_units mu
+                ON mu.id = p.unit_id
+            WHERE p.id = ${item.id}
         `;
 
         if (!product) {
