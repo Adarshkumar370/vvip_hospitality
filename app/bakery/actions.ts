@@ -30,6 +30,11 @@ const productSchema = z.object({
 
 const ORDER_STATUSES = ["payment_pending", "payment_failed", "placed", "confirmed", "preparing", "ready_for_pickup", "out_for_delivery", "completed", "cancelled"] as const;
 type OrderStatus = typeof ORDER_STATUSES[number];
+const ORDERING_TIME_ZONE = "Asia/Kolkata";
+const ORDERING_CLOSED_START_HOUR = 22;
+const ORDERING_OPEN_HOUR = 8;
+const ORDERING_CLOSED_ERROR = "Online ordering is available from 8:00 AM to 10:00 PM IST. Please place your order during business hours.";
+type OrderPaymentMode = "prepaid" | "postpaid";
 
 const LEGACY_TO_DB_ORDER_STATUS: Record<string, OrderStatus> = {
     pending: "placed",
@@ -75,6 +80,32 @@ const uuidId = z.string().uuid();
 
 function isUuid(value: unknown): value is string {
     return typeof value === "string" && uuidId.safeParse(value).success;
+}
+
+function getHourInTimeZone(date: Date, timeZone: string) {
+    const hourPart = new Intl.DateTimeFormat("en-US", {
+        hour: "2-digit",
+        hourCycle: "h23",
+        timeZone,
+    }).formatToParts(date).find((part) => part.type === "hour");
+
+    return Number(hourPart?.value ?? date.getHours());
+}
+
+function isOrderingClosed(now = new Date()) {
+    const currentHour = getHourInTimeZone(now, ORDERING_TIME_ZONE);
+    return currentHour >= ORDERING_CLOSED_START_HOUR || currentHour < ORDERING_OPEN_HOUR;
+}
+
+function getOrderingWindowViolation() {
+    return {
+        productId: "ordering_window",
+        productName: "Ordering hours",
+        remaining: 0,
+        unit: "order",
+        requested: 1,
+        error: ORDERING_CLOSED_ERROR,
+    };
 }
 
 function normalizeMobileNo(phone: string) {
@@ -392,7 +423,7 @@ function toStaffView(staff: any) {
 function defaultPermissionCodesForRole(role: StaffRole) {
     if (role === "baker") return ["mark_order_preparing", "mark_order_ready"];
     if (role === "delivery") return ["mark_order_out_for_delivery", "mark_order_completed"];
-    if (role === "accountant") return ["manage_payments", "issue_invoice", "issue_receipt", "view_reports"];
+    if (role === "accountant") return ["place_order_on_behalf", "manage_payments", "issue_invoice", "issue_receipt", "view_reports"];
     if (role === "manager") return ["place_order_on_behalf", "assign_work_orders", "complete_work_orders", "mark_order_confirmed", "mark_order_preparing", "mark_order_ready", "mark_order_out_for_delivery", "mark_order_completed", "cancel_order", "view_reports"];
     return [];
 }
@@ -1966,12 +1997,209 @@ const placeOrderSchema = z.object({
     addressId: uuidId,
 });
 
+const staffPlaceOrderSchema = placeOrderSchema.extend({
+    paymentMode: z.enum(["prepaid", "postpaid"]).default("prepaid"),
+});
+
 const cartLimitValidationSchema = z.object({
     items: z.array(z.object({
         id: uuidId,
         quantity: z.number().positive(),
     })).min(1),
 });
+
+async function getAuthenticatedStaffForOrderOnBehalf() {
+    const session = await getIronSession<StaffSessionData>(await cookies(), staffSessionOptions);
+    const sessionStaff = session.staff;
+
+    if (!sessionStaff?.id || !isUuid(sessionStaff.id)) {
+        return { success: false as const, error: "Unauthorized. Please sign in again." };
+    }
+
+    const [staff] = await sql`
+        SELECT id, staff_name, email, mobile_no, designation, status
+        FROM staff_members
+        WHERE id = ${sessionStaff.id}
+          AND status = 'active'
+    `;
+
+    if (!staff) {
+        return { success: false as const, error: "Staff session is no longer valid." };
+    }
+
+    const staffView = toStaffView(staff);
+    if (!["admin", "manager", "accountant"].includes(staffView.role)) {
+        return { success: false as const, error: "Only admin, manager, or accountant staff can place orders on behalf of users." };
+    }
+
+    await grantDefaultStaffPermissions(sql, staffView.id, staffView.role);
+
+    const [hasPermission] = await sql`
+        SELECT staff_has_permission(${staffView.id}::uuid, 'place_order_on_behalf'::varchar) AS allowed
+    `;
+
+    if (!hasPermission?.allowed) {
+        return { success: false as const, error: "Missing permission: place_order_on_behalf" };
+    }
+
+    return { success: true as const, staff: staffView };
+}
+
+async function createOrderForUser(input: {
+    userId: string;
+    items: { id: string, quantity: number }[];
+    addressId: string;
+    paymentMode: OrderPaymentMode;
+    frontendTotal?: number;
+    placedByStaffId?: string;
+}) {
+    if (isOrderingClosed()) {
+        return { success: false, error: ORDERING_CLOSED_ERROR };
+    }
+
+    const productsRes = await getProductsForUser(input.userId);
+    if (!productsRes.success) throw new Error("Could not fetch prices");
+
+    const availableProducts = productsRes.products || [];
+    const [userProfile] = await sql`
+        SELECT
+            u.id,
+            u.payment_type,
+            bp.billing_status,
+            bp.credit_limit,
+            bp.billing_cycle_day,
+            bp.payment_terms_days
+        FROM app_users u
+        LEFT JOIN user_billing_profiles bp
+            ON bp.user_id = u.id
+        WHERE u.id = ${input.userId}
+    `;
+
+    if (!userProfile) {
+        return { success: false, error: "User not found" };
+    }
+
+    const isEligibleForPostpaid = userProfile.payment_type === "postpaid_user";
+    const isPostpaidUser = isEligibleForPostpaid && input.paymentMode === "postpaid";
+    let calculatedTotal = 0;
+    const finalItems: { product_id: string | number, quantity: number }[] = [];
+    const dailyLimitValidation = await validateDailyProductLimitsInternal(input.items);
+
+    if (!dailyLimitValidation.allowed) {
+        return {
+            success: false,
+            error: dailyLimitValidation.violations[0]?.error || "Daily product limit exceeded.",
+        };
+    }
+
+    for (const item of input.items) {
+        const product = availableProducts.find((p: any) => String(p.id) === String(item.id));
+        if (!product) {
+            return { success: false, error: `Product ID ${item.id} not found` };
+        }
+        const itemTotal = product.price * item.quantity;
+        calculatedTotal += itemTotal;
+        finalItems.push({
+            product_id: product.id,
+            quantity: item.quantity
+        });
+    }
+
+    if (input.frontendTotal !== undefined && Math.abs(calculatedTotal - Number(input.frontendTotal)) > 0.5) {
+        console.warn("Frontend total mismatch", { frontendTotal: input.frontendTotal, calculatedTotal });
+    }
+
+    if (isPostpaidUser) {
+        if (userProfile.billing_status !== "active") {
+            return { success: false, error: "Postpaid billing is not active for this account." };
+        }
+
+        const billingSummary = await getUserBillingSummaryInternal(input.userId);
+        if (!billingSummary.success) {
+            return { success: false, error: billingSummary.error || "Could not verify billing profile" };
+        }
+
+        const availableCredit = Number(billingSummary.summary.availableCredit || 0);
+        if (calculatedTotal > availableCredit) {
+            return {
+                success: false,
+                error: `Postpaid limit exceeded. Available balance is INR ${availableCredit.toFixed(2)}.`,
+            };
+        }
+    }
+
+    return await sql.begin(async (tx: any) => {
+        const isStaffOrder = Boolean(input.placedByStaffId);
+        const [order] = await tx`
+            INSERT INTO orders (
+                user_id, delivery_address_id, fulfillment_type,
+                order_source, placed_by, placed_by_staff_id,
+                order_status, payment_type_snapshot
+            )
+            VALUES (
+                ${input.userId},
+                ${input.addressId},
+                'delivery',
+                ${isStaffOrder ? 'phone' : 'web'},
+                ${isStaffOrder ? 'staff' : 'self'},
+                ${input.placedByStaffId || null},
+                ${isPostpaidUser || isStaffOrder ? 'placed' : 'payment_pending'},
+                ${isPostpaidUser ? 'postpaid_user' : 'prepaid_user'}
+            )
+            RETURNING id
+        `;
+
+        for (const [index, item] of finalItems.entries()) {
+            await tx`
+                INSERT INTO order_items (order_id, product_id, quantity, line_number)
+                VALUES (${order.id}, ${item.product_id}, ${item.quantity}, ${index + 1})
+            `;
+        }
+
+        const [savedOrder] = await tx`
+            SELECT id, total_amount
+            FROM orders
+            WHERE id = ${order.id}
+        `;
+
+        if (isStaffOrder && !isPostpaidUser) {
+            const [payment] = await tx`
+                INSERT INTO payments (
+                    user_id, order_id, amount, currency_code, payment_method,
+                    payment_status, payment_provider, provider_status,
+                    provider_status_message, idempotency_key
+                )
+                VALUES (
+                    ${input.userId}, ${savedOrder.id}, ${savedOrder.total_amount}, 'INR', 'cash',
+                    'succeeded', 'staff_offline', 'captured',
+                    'Offline payment recorded by staff order on behalf',
+                    ${`staff_cash:${savedOrder.id}`}
+                )
+                ON CONFLICT (payment_provider, idempotency_key)
+                    WHERE payment_provider IS NOT NULL AND idempotency_key IS NOT NULL
+                DO UPDATE SET
+                    amount = EXCLUDED.amount,
+                    payment_status = 'succeeded',
+                    provider_status = 'captured',
+                    provider_status_message = EXCLUDED.provider_status_message
+                RETURNING id
+            `;
+
+            await tx`
+                INSERT INTO receipts (payment_id, user_id, amount, notes)
+                VALUES (${payment.id}, ${input.userId}, ${savedOrder.total_amount}, 'Auto-issued for staff offline order')
+                ON CONFLICT (payment_id) DO NOTHING
+            `;
+        }
+
+        return {
+            success: true,
+            orderId: savedOrder.id,
+            total: Number(savedOrder.total_amount),
+            paymentMode: isPostpaidUser ? "postpaid" : "prepaid",
+        };
+    });
+}
 
 async function validateDailyProductLimitsInternal(items: { id: string, quantity: number }[], excludeOrderId?: string | null) {
     const violations: { productId: string; productName: string; remaining: number; unit: string; requested: number; error: string }[] = [];
@@ -2050,6 +2278,14 @@ export async function validateCartProductLimits(items: { id: string | number, qu
             return { success: false as const, error: "Unauthorized. Please log in again." };
         }
 
+        if (isOrderingClosed()) {
+            return {
+                success: true as const,
+                allowed: false,
+                violations: [getOrderingWindowViolation()],
+            };
+        }
+
         const parsed = cartLimitValidationSchema.safeParse({ items });
         if (!parsed.success) {
             return { success: false as const, error: "Invalid cart data" };
@@ -2126,6 +2362,10 @@ export async function placeOrder(
             return { success: false, error: "Unauthorized. Please log in again." };
         }
 
+        if (isOrderingClosed()) {
+            return { success: false, error: ORDERING_CLOSED_ERROR };
+        }
+
         // 2. Input Validation
         const parsed = placeOrderSchema.safeParse({ userId, items, addressId });
         if (!parsed.success) {
@@ -2134,113 +2374,44 @@ export async function placeOrder(
 
         const validData = parsed.data;
 
-        // 3. Server-side Price Verification
-        const productsRes = await getProductsForUser(validData.userId);
-        if (!productsRes.success) throw new Error("Could not fetch prices");
-
-        const availableProducts = productsRes.products || [];
-        const [userProfile] = await sql`
-            SELECT
-                u.payment_type,
-                bp.billing_status,
-                bp.credit_limit,
-                bp.billing_cycle_day,
-                bp.payment_terms_days
-            FROM app_users u
-            LEFT JOIN user_billing_profiles bp
-                ON bp.user_id = u.id
-            WHERE u.id = ${validData.userId}
-        `;
-        const isEligibleForPostpaid = userProfile?.payment_type === "postpaid_user";
-        const isPostpaidUser = isEligibleForPostpaid && paymentMode === "postpaid";
-        let calculatedTotal = 0;
-        const finalItems: { product_id: string | number, quantity: number }[] = [];
-        const dailyLimitValidation = await validateDailyProductLimitsInternal(validData.items);
-        if (!dailyLimitValidation.allowed) {
-            return {
-                success: false,
-                error: dailyLimitValidation.violations[0]?.error || "Daily product limit exceeded.",
-            };
-        }
-
-        for (const item of validData.items) {
-            const product = availableProducts.find((p: any) => String(p.id) === String(item.id));
-            if (!product) {
-                return { success: false, error: `Product ID ${item.id} not found` };
-            }
-            const itemTotal = product.price * item.quantity;
-            calculatedTotal += itemTotal;
-            finalItems.push({
-                product_id: product.id,
-                quantity: item.quantity
-            });
-        }
-
-        if (Math.abs(calculatedTotal - Number(frontendTotal)) > 0.5) {
-            console.warn("Frontend total mismatch", { frontendTotal, calculatedTotal });
-        }
-
-        if (isPostpaidUser) {
-            if (userProfile?.billing_status !== "active") {
-                return { success: false, error: "Postpaid billing is not active for this account." };
-            }
-
-            const billingSummary = await getUserBillingSummaryInternal(validData.userId);
-            if (!billingSummary.success) {
-                return { success: false, error: billingSummary.error || "Could not verify billing profile" };
-            }
-
-            const availableCredit = Number(billingSummary.summary.availableCredit || 0);
-            if (calculatedTotal > availableCredit) {
-                return {
-                    success: false,
-                    error: `Postpaid limit exceeded. Available balance is INR ${availableCredit.toFixed(2)}.`,
-                };
-            }
-        }
-
-        // 4. Execute Transaction
-        return await sql.begin(async (tx: any) => {
-            const [order] = await tx`
-                INSERT INTO orders (
-                    user_id, delivery_address_id, fulfillment_type,
-                    order_source, placed_by, order_status, payment_type_snapshot
-                )
-                VALUES (
-                    ${validData.userId},
-                    ${validData.addressId},
-                    'delivery',
-                    'web',
-                    'self',
-                    ${isPostpaidUser ? 'placed' : 'payment_pending'},
-                    ${isPostpaidUser ? 'postpaid_user' : 'prepaid_user'}
-                )
-                RETURNING id
-            `;
-
-            for (const [index, item] of finalItems.entries()) {
-                await tx`
-                    INSERT INTO order_items (order_id, product_id, quantity, line_number)
-                    VALUES (${order.id}, ${item.product_id}, ${item.quantity}, ${index + 1})
-                `;
-            }
-
-            const [savedOrder] = await tx`
-                SELECT id, total_amount
-                FROM orders
-                WHERE id = ${order.id}
-            `;
-
-            return {
-                success: true,
-                orderId: savedOrder.id,
-                total: Number(savedOrder.total_amount),
-                paymentMode: isPostpaidUser ? "postpaid" : "prepaid",
-            };
+        return await createOrderForUser({
+            userId: validData.userId,
+            items: validData.items,
+            addressId: validData.addressId,
+            paymentMode,
+            frontendTotal,
         });
     } catch (err) {
         console.error("Failed to place order:", err);
         return { success: false, error: "An unexpected error occurred while placing your order" };
+    }
+}
+
+export async function staffPlaceOrder(
+    userId: string | number,
+    items: { id: string | number, quantity: number }[],
+    addressId: string | number,
+    paymentMode: OrderPaymentMode = "prepaid"
+) {
+    try {
+        const auth = await getAuthenticatedStaffForOrderOnBehalf();
+        if (!auth.success) return { success: false, error: auth.error };
+
+        const parsed = staffPlaceOrderSchema.safeParse({ userId, items, addressId, paymentMode });
+        if (!parsed.success) {
+            return { success: false, error: "Invalid order data" };
+        }
+
+        return await createOrderForUser({
+            userId: parsed.data.userId,
+            items: parsed.data.items,
+            addressId: parsed.data.addressId,
+            paymentMode: parsed.data.paymentMode,
+            placedByStaffId: auth.staff.id,
+        });
+    } catch (err) {
+        console.error("Failed to place staff order:", err);
+        return { success: false, error: "An unexpected error occurred while placing the order" };
     }
 }
 

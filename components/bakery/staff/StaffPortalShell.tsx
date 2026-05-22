@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { RupeeAmount } from "@/components/ui/RupeeAmount";
-import { getOrders, getProducts, getStaffSession, logoutStaff, retryStaffInvoiceGeneration, staffLogin, updateOrderStatus, updateProductDailyLimitForStaff } from "@/app/bakery/actions";
+import { getAddresses, getOrders, getProducts, getProductsForUser, getStaffSession, getUsers, logoutStaff, retryStaffInvoiceGeneration, staffLogin, staffPlaceOrder, updateOrderStatus, updateProductDailyLimitForStaff } from "@/app/bakery/actions";
 
 type StaffRole = "baker" | "delivery" | "manager" | "accountant" | "admin";
 type PortalKey = "baker" | "delivery-agent" | "manager" | "accountant" | "owner";
@@ -76,7 +76,28 @@ type ProductRecord = {
     name: string;
     category: string;
     unit: string;
+    price: number;
+    image?: string;
     max_daily_limit: number;
+};
+
+type UserRecord = {
+    id: string;
+    name: string;
+    email: string;
+    phone: string;
+    payment_type?: "prepaid_user" | "postpaid_user";
+};
+
+type AddressRecord = {
+    id: string;
+    receiver_name: string;
+    receiver_phone: string;
+    address_line1: string;
+    address_line2?: string | null;
+    city: string;
+    pincode: string;
+    is_default?: boolean;
 };
 
 const ORDERS_PER_PAGE = 50;
@@ -307,7 +328,7 @@ export function StaffRolePortal({ portalKey }: { portalKey: PortalKey }) {
     );
     const [staff, setStaff] = useState<StaffMember | null>(null);
     const [isCheckingSession, setIsCheckingSession] = useState(true);
-    const [activeSection, setActiveSection] = useState<"orders" | "limits">("orders");
+    const [activeSection, setActiveSection] = useState<"orders" | "limits" | "create">("orders");
 
     useEffect(() => {
         const checkSession = async () => {
@@ -416,6 +437,21 @@ export function StaffRolePortal({ portalKey }: { portalKey: PortalKey }) {
                             </>
                         ) : null}
 
+                        {["admin", "manager", "accountant"].includes(staff.role) ? (
+                            <button
+                                onClick={() => setActiveSection("create")}
+                                className={cn(
+                                    "flex items-center gap-3 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-widest transition-all",
+                                    activeSection === "create"
+                                        ? "bg-brand-olive-dark text-brand-gold-bright"
+                                        : "text-gray-400 hover:bg-brand-soft-gray hover:text-brand-olive-dark"
+                                )}
+                            >
+                                <Package size={18} />
+                                Place Order
+                            </button>
+                        ) : null}
+
                         {staff.role === "admin" ? (
                             <a
                                 href="/bakery/admin"
@@ -459,7 +495,7 @@ function StaffDashboard({
 }: {
     staff: StaffMember;
     portalLabel: string;
-    activeSection: "orders" | "limits";
+    activeSection: "orders" | "limits" | "create";
 }) {
     const [orders, setOrders] = useState<OrderRecord[]>([]);
     const [products, setProducts] = useState<ProductRecord[]>([]);
@@ -812,6 +848,17 @@ function StaffDashboard({
                 </div>
             ) : null}
 
+            {["admin", "manager", "accountant"].includes(staff.role) && activeSection === "create" ? (
+                <StaffCreateOrderPanel
+                    onOrderPlaced={async () => {
+                        const refresh = await loadOrders();
+                        if (!refresh.success) {
+                            setActionMessage({ type: "error", text: refresh.error || "Order placed, but refresh failed." });
+                        }
+                    }}
+                />
+            ) : null}
+
             {hasTabs && activeSection === "orders" ? (
                 <div className="flex w-fit gap-2 rounded-3xl bg-brand-soft-gray/50 p-2">
                     {[
@@ -907,6 +954,283 @@ function StaffDashboard({
                 ) : null}
                 </div>
             ) : null}
+        </div>
+    );
+}
+
+function StaffCreateOrderPanel({ onOrderPlaced }: { onOrderPlaced: () => Promise<void> }) {
+    const [users, setUsers] = useState<UserRecord[]>([]);
+    const [products, setProducts] = useState<ProductRecord[]>([]);
+    const [addresses, setAddresses] = useState<AddressRecord[]>([]);
+    const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null);
+    const [selectedAddressId, setSelectedAddressId] = useState("");
+    const [paymentMode, setPaymentMode] = useState<"prepaid" | "postpaid">("prepaid");
+    const [quantities, setQuantities] = useState<Record<string, number>>({});
+    const [searchTerm, setSearchTerm] = useState("");
+    const [isLoadingUsers, setIsLoadingUsers] = useState(true);
+    const [isLoadingSelection, setIsLoadingSelection] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+    useEffect(() => {
+        const loadUsers = async () => {
+            const result = await getUsers();
+            if (result.success) {
+                setUsers((result.users || []) as UserRecord[]);
+            } else {
+                setMessage({ type: "error", text: result.error || "Failed to load users." });
+            }
+            setIsLoadingUsers(false);
+        };
+
+        void loadUsers();
+    }, []);
+
+    const filteredUsers = useMemo(() => {
+        const term = searchTerm.trim().toLowerCase();
+        if (!term) return users;
+        return users.filter((user) =>
+            [user.name, user.phone, user.email]
+                .filter(Boolean)
+                .some((value) => value.toLowerCase().includes(term))
+        );
+    }, [searchTerm, users]);
+
+    const selectedItems = useMemo(
+        () => products
+            .map((product) => ({
+                product,
+                quantity: Number(quantities[product.id] || 0),
+            }))
+            .filter((item) => item.quantity > 0),
+        [products, quantities]
+    );
+
+    const orderTotal = selectedItems.reduce(
+        (sum, item) => sum + Number(item.product.price || 0) * item.quantity,
+        0
+    );
+
+    const handleUserSelect = async (user: UserRecord) => {
+        setSelectedUser(user);
+        setSelectedAddressId("");
+        setProducts([]);
+        setAddresses([]);
+        setQuantities({});
+        setMessage(null);
+        setPaymentMode(user.payment_type === "postpaid_user" ? "postpaid" : "prepaid");
+        setIsLoadingSelection(true);
+
+        const [addressResult, productResult] = await Promise.all([
+            getAddresses(user.id),
+            getProductsForUser(user.id),
+        ]);
+
+        if (addressResult.success) {
+            const addressList = (addressResult.addresses || []) as AddressRecord[];
+            setAddresses(addressList);
+            const defaultAddress = addressList.find((address) => address.is_default) || addressList[0];
+            if (defaultAddress) setSelectedAddressId(String(defaultAddress.id));
+        } else {
+            setMessage({ type: "error", text: addressResult.error || "Failed to load addresses." });
+        }
+
+        if (productResult.success) {
+            setProducts((productResult.products || []) as ProductRecord[]);
+        } else {
+            setMessage({ type: "error", text: productResult.error || "Failed to load products." });
+        }
+
+        setIsLoadingSelection(false);
+    };
+
+    const handleQuantityChange = (productId: string, rawValue: string) => {
+        const value = Math.max(0, Math.floor(Number(rawValue) || 0));
+        setQuantities((current) => ({
+            ...current,
+            [productId]: value,
+        }));
+    };
+
+    const handleSubmit = async () => {
+        if (!selectedUser || !selectedAddressId || selectedItems.length === 0) return;
+
+        setIsSubmitting(true);
+        setMessage(null);
+
+        try {
+            const result = await staffPlaceOrder(
+                selectedUser.id,
+                selectedItems.map((item) => ({ id: item.product.id, quantity: item.quantity })),
+                selectedAddressId,
+                paymentMode
+            );
+
+            if (!result.success) {
+                setMessage({ type: "error", text: ("error" in result ? result.error : null) || "Failed to place order." });
+                return;
+            }
+
+            setQuantities({});
+            setMessage({ type: "success", text: `Order placed successfully. Total INR ${Number("total" in result ? result.total : orderTotal).toFixed(2)}.` });
+            await onOrderPlaced();
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    return (
+        <div className="rounded-[2.5rem] bg-white p-8 shadow-premium">
+            <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                <div>
+                    <p className="mb-1 text-[10px] font-black uppercase tracking-[0.3em] text-brand-gold-bright">Staff Ordering</p>
+                    <h3 className="text-2xl font-serif font-black text-brand-olive-dark">Place Order For User</h3>
+                </div>
+                <div className="rounded-2xl bg-brand-soft-gray px-5 py-4 text-right">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Order Total</p>
+                    <RupeeAmount className="text-xl font-black text-brand-olive-dark" value={orderTotal.toFixed(2)} />
+                </div>
+            </div>
+
+            {message ? (
+                <div
+                    className={cn(
+                        "mb-6 rounded-2xl px-5 py-4 text-sm font-bold",
+                        message.type === "success" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"
+                    )}
+                >
+                    {message.text}
+                </div>
+            ) : null}
+
+            <div className="grid gap-8 lg:grid-cols-[0.85fr_1.15fr]">
+                <section className="space-y-5">
+                    <div>
+                        <label className="mb-2 block pl-2 text-[10px] font-black uppercase tracking-widest text-gray-400">Find User</label>
+                        <input
+                            value={searchTerm}
+                            onChange={(event) => setSearchTerm(event.target.value)}
+                            placeholder="Search name, phone, or email"
+                            className="w-full rounded-2xl border-2 border-transparent bg-brand-soft-gray px-5 py-4 text-sm font-bold text-brand-olive-dark outline-none transition-all focus:border-brand-gold-bright/30"
+                        />
+                    </div>
+
+                    <div className="max-h-[420px] space-y-3 overflow-y-auto pr-2">
+                        {isLoadingUsers ? (
+                            <div className="flex justify-center py-12">
+                                <Loader2 className="animate-spin text-brand-gold-bright" size={28} />
+                            </div>
+                        ) : filteredUsers.length === 0 ? (
+                            <div className="rounded-2xl bg-brand-soft-gray p-6 text-center text-xs font-black uppercase tracking-widest text-gray-400">
+                                No users found
+                            </div>
+                        ) : (
+                            filteredUsers.map((user) => (
+                                <button
+                                    key={user.id}
+                                    onClick={() => handleUserSelect(user)}
+                                    className={cn(
+                                        "w-full rounded-2xl border p-4 text-left transition-all",
+                                        selectedUser?.id === user.id
+                                            ? "border-brand-olive-dark bg-brand-olive-dark text-white shadow-lg"
+                                            : "border-transparent bg-brand-soft-gray/60 text-brand-olive-dark hover:border-brand-gold-bright/30"
+                                    )}
+                                >
+                                    <p className="truncate text-sm font-black">{user.name}</p>
+                                    <p className={cn("mt-1 truncate text-[10px] font-bold uppercase tracking-widest", selectedUser?.id === user.id ? "text-brand-gold-bright" : "text-gray-400")}>
+                                        {user.phone || user.email}
+                                    </p>
+                                </button>
+                            ))
+                        )}
+                    </div>
+                </section>
+
+                <section className="space-y-6">
+                    {!selectedUser ? (
+                        <div className="flex min-h-[420px] flex-col items-center justify-center rounded-[2rem] border-4 border-dashed border-brand-soft-gray text-center">
+                            <User className="mb-4 text-brand-soft-gray" size={54} />
+                            <p className="text-sm font-black uppercase tracking-widest text-gray-400">Select a user to build an order</p>
+                        </div>
+                    ) : isLoadingSelection ? (
+                        <div className="flex min-h-[420px] items-center justify-center">
+                            <Loader2 className="animate-spin text-brand-gold-bright" size={36} />
+                        </div>
+                    ) : (
+                        <>
+                            <div className="grid gap-4 md:grid-cols-2">
+                                <div>
+                                    <label className="mb-2 block pl-2 text-[10px] font-black uppercase tracking-widest text-gray-400">Delivery Address</label>
+                                    <select
+                                        value={selectedAddressId}
+                                        onChange={(event) => setSelectedAddressId(event.target.value)}
+                                        className="w-full rounded-2xl border-2 border-transparent bg-brand-soft-gray px-5 py-4 text-sm font-bold text-brand-olive-dark outline-none transition-all focus:border-brand-gold-bright/30"
+                                    >
+                                        {addresses.length === 0 ? (
+                                            <option value="">No saved address</option>
+                                        ) : (
+                                            addresses.map((address) => (
+                                                <option key={address.id} value={address.id}>
+                                                    {address.address_line1}, {address.city} - {address.pincode}
+                                                </option>
+                                            ))
+                                        )}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="mb-2 block pl-2 text-[10px] font-black uppercase tracking-widest text-gray-400">Payment</label>
+                                    <select
+                                        value={paymentMode}
+                                        onChange={(event) => setPaymentMode(event.target.value as "prepaid" | "postpaid")}
+                                        className="w-full rounded-2xl border-2 border-transparent bg-brand-soft-gray px-5 py-4 text-sm font-bold text-brand-olive-dark outline-none transition-all focus:border-brand-gold-bright/30"
+                                    >
+                                        <option value="prepaid">Cash collected by staff</option>
+                                        {selectedUser.payment_type === "postpaid_user" ? (
+                                            <option value="postpaid">Add to postpaid billing</option>
+                                        ) : null}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="max-h-[520px] space-y-3 overflow-y-auto pr-2">
+                                {products.map((product) => (
+                                    <div key={product.id} className="grid gap-4 rounded-[2rem] bg-brand-soft-gray/50 p-4 md:grid-cols-[1fr_8rem] md:items-center">
+                                        <div className="flex items-center gap-4">
+                                            <div className="relative h-14 w-14 overflow-hidden rounded-xl bg-white shadow-sm">
+                                                <Image src={product.image || "/images/bakery/sourdough.png"} alt={product.name} fill className="object-cover" />
+                                            </div>
+                                            <div>
+                                                <p className="text-sm font-black text-brand-olive-dark">{product.name}</p>
+                                                <p className="mt-1 flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-gray-400">
+                                                    <RupeeAmount value={Number(product.price || 0)} /> {product.unit}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            value={quantities[product.id] || ""}
+                                            onChange={(event) => handleQuantityChange(product.id, event.target.value)}
+                                            placeholder="Qty"
+                                            className="w-full rounded-2xl border-2 border-transparent bg-white px-5 py-4 text-sm font-black text-brand-olive-dark outline-none transition-all focus:border-brand-gold-bright/30"
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+
+                            <button
+                                onClick={handleSubmit}
+                                disabled={isSubmitting || !selectedAddressId || selectedItems.length === 0}
+                                className="flex w-full items-center justify-center gap-3 rounded-2xl bg-brand-olive-dark py-5 text-xs font-black uppercase tracking-[0.2em] text-white shadow-xl transition-all hover:bg-brand-gold-bright disabled:cursor-not-allowed disabled:bg-gray-300"
+                            >
+                                {isSubmitting ? <Loader2 size={20} className="animate-spin" /> : <CheckCircle2 size={20} />}
+                                Place Order
+                            </button>
+                        </>
+                    )}
+                </section>
+            </div>
         </div>
     );
 }
