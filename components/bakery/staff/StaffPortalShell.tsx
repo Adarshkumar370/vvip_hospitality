@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { RupeeAmount } from "@/components/ui/RupeeAmount";
-import { getAddresses, getOrders, getProducts, getProductsForUser, getStaffSession, getUsers, logoutStaff, retryStaffInvoiceGeneration, staffLogin, staffPlaceOrder, updateOrderStatus, updateProductDailyLimitForStaff } from "@/app/bakery/actions";
+import { getAddresses, getOrders, getProducts, getProductsForUser, getStaffSession, getUserBillingSummary, getUsers, logoutStaff, retryStaffInvoiceGeneration, staffLogin, staffPlaceOrder, updateOrderStatus, updateProductDailyLimitForStaff } from "@/app/bakery/actions";
 
 type StaffRole = "baker" | "delivery" | "manager" | "accountant" | "admin";
 type PortalKey = "baker" | "delivery-agent" | "manager" | "accountant" | "owner";
@@ -98,6 +98,13 @@ type AddressRecord = {
     city: string;
     pincode: string;
     is_default?: boolean;
+};
+
+type BillingSummaryRecord = {
+    isPostpaid: boolean;
+    creditLimit: number;
+    pendingAmount: number;
+    availableCredit: number;
 };
 
 const ORDERS_PER_PAGE = 50;
@@ -965,6 +972,7 @@ function StaffCreateOrderPanel({ onOrderPlaced }: { onOrderPlaced: () => Promise
     const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null);
     const [selectedAddressId, setSelectedAddressId] = useState("");
     const [paymentMode, setPaymentMode] = useState<"prepaid" | "postpaid">("prepaid");
+    const [billingSummary, setBillingSummary] = useState<BillingSummaryRecord | null>(null);
     const [quantities, setQuantities] = useState<Record<string, number>>({});
     const [searchTerm, setSearchTerm] = useState("");
     const [isLoadingUsers, setIsLoadingUsers] = useState(true);
@@ -1017,13 +1025,15 @@ function StaffCreateOrderPanel({ onOrderPlaced }: { onOrderPlaced: () => Promise
         setProducts([]);
         setAddresses([]);
         setQuantities({});
+        setBillingSummary(null);
         setMessage(null);
         setPaymentMode(user.payment_type === "postpaid_user" ? "postpaid" : "prepaid");
         setIsLoadingSelection(true);
 
-        const [addressResult, productResult] = await Promise.all([
+        const [addressResult, productResult, billingResult] = await Promise.all([
             getAddresses(user.id),
             getProductsForUser(user.id),
+            getUserBillingSummary(user.id),
         ]);
 
         if (addressResult.success) {
@@ -1041,6 +1051,10 @@ function StaffCreateOrderPanel({ onOrderPlaced }: { onOrderPlaced: () => Promise
             setMessage({ type: "error", text: productResult.error || "Failed to load products." });
         }
 
+        if (billingResult.success) {
+            setBillingSummary(billingResult.summary as BillingSummaryRecord);
+        }
+
         setIsLoadingSelection(false);
     };
 
@@ -1054,6 +1068,17 @@ function StaffCreateOrderPanel({ onOrderPlaced }: { onOrderPlaced: () => Promise
 
     const handleSubmit = async () => {
         if (!selectedUser || !selectedAddressId || selectedItems.length === 0) return;
+
+        if (
+            paymentMode === "postpaid" &&
+            billingSummary?.isPostpaid &&
+            orderTotal > Number(billingSummary.availableCredit || 0)
+        ) {
+            const shouldContinue = window.confirm(
+                `This postpaid order exceeds the available budget by INR ${(orderTotal - Number(billingSummary.availableCredit || 0)).toFixed(2)}. Continue with manual entry?`
+            );
+            if (!shouldContinue) return;
+        }
 
         setIsSubmitting(true);
         setMessage(null);
@@ -1192,6 +1217,19 @@ function StaffCreateOrderPanel({ onOrderPlaced }: { onOrderPlaced: () => Promise
                                     </select>
                                 </div>
                             </div>
+
+                            {paymentMode === "postpaid" && billingSummary?.isPostpaid ? (
+                                <div
+                                    className={cn(
+                                        "rounded-2xl border px-5 py-4 text-sm font-bold",
+                                        orderTotal > Number(billingSummary.availableCredit || 0)
+                                            ? "border-amber-300 bg-amber-50 text-amber-700"
+                                            : "border-green-200 bg-green-50 text-green-700"
+                                    )}
+                                >
+                                    Available budget INR {Number(billingSummary.availableCredit || 0).toFixed(2)}. This order will be marked postpaid pending and counted against the user's budget.
+                                </div>
+                            ) : null}
 
                             <div className="max-h-[520px] space-y-3 overflow-y-auto pr-2">
                                 {products.map((product) => (

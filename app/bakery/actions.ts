@@ -2052,6 +2052,7 @@ async function createOrderForUser(input: {
     paymentMode: OrderPaymentMode;
     frontendTotal?: number;
     placedByStaffId?: string;
+    allowPostpaidOverLimit?: boolean;
 }) {
     if (isOrderingClosed()) {
         return { success: false, error: ORDERING_CLOSED_ERROR };
@@ -2120,7 +2121,7 @@ async function createOrderForUser(input: {
         }
 
         const availableCredit = Number(billingSummary.summary.availableCredit || 0);
-        if (calculatedTotal > availableCredit) {
+        if (calculatedTotal > availableCredit && !input.allowPostpaidOverLimit) {
             return {
                 success: false,
                 error: `Postpaid limit exceeded. Available balance is INR ${availableCredit.toFixed(2)}.`,
@@ -2408,6 +2409,7 @@ export async function staffPlaceOrder(
             addressId: parsed.data.addressId,
             paymentMode: parsed.data.paymentMode,
             placedByStaffId: auth.staff.id,
+            allowPostpaidOverLimit: true,
         });
     } catch (err) {
         console.error("Failed to place staff order:", err);
