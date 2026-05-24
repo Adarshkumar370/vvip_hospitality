@@ -91,7 +91,7 @@ export default function CartDrawer({ isOpen, onClose, onRequireAuth }: CartDrawe
                         className="fixed top-0 right-0 h-full w-full max-w-md bg-white shadow-2xl z-[101] flex flex-col"
                     >
                         {/* Header */}
-                        <div className="p-8 border-b border-brand-olive-dark/5 flex items-center justify-between">
+                        <div className="p-5 sm:p-8 border-b border-brand-olive-dark/5 flex items-center justify-between">
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 bg-brand-soft-gray rounded-xl flex items-center justify-center text-brand-gold-bright">
                                     <ShoppingBag size={20} />
@@ -110,7 +110,7 @@ export default function CartDrawer({ isOpen, onClose, onRequireAuth }: CartDrawe
                         </div>
 
                         {/* Items List */}
-                        <div className="flex-1 overflow-y-auto p-8 space-y-6">
+                        <div className="flex-1 overflow-y-auto p-5 sm:p-8 space-y-6">
                             {cart.length === 0 ? (
                                 <div className="h-full flex flex-col items-center justify-center text-center space-y-4">
                                     <div className="w-20 h-20 bg-brand-soft-gray rounded-full flex items-center justify-center text-gray-300">
@@ -132,9 +132,9 @@ export default function CartDrawer({ isOpen, onClose, onRequireAuth }: CartDrawe
                                     <motion.div
                                         key={item.id}
                                         layout
-                                        className="flex gap-4 group"
+                                        className="flex gap-3 sm:gap-4 group"
                                     >
-                                        <div className="relative w-24 h-24 bg-brand-soft-gray rounded-2xl overflow-hidden flex-shrink-0">
+                                        <div className="relative w-20 h-20 sm:w-24 sm:h-24 bg-brand-soft-gray rounded-xl sm:rounded-2xl overflow-hidden flex-shrink-0">
                                             <Image
                                                 src={item.image}
                                                 alt={item.name}
@@ -190,13 +190,11 @@ export default function CartDrawer({ isOpen, onClose, onRequireAuth }: CartDrawe
 
                         {/* Footer */}
                         {cart.length > 0 && (
-                            <div className="p-8 border-t border-brand-olive-dark/5 space-y-6 bg-brand-soft-gray/30">
+                            <div className="p-5 sm:p-8 border-t border-brand-olive-dark/5 space-y-6 bg-brand-soft-gray/30">
                                 <div className="space-y-2">
                                     <div className="flex justify-between text-sm">
                                         <span className="text-gray-500 font-medium">Subtotal</span>
                                         <RupeeAmount className="font-black text-brand-olive-dark" value={totalPrice} />
-                                    </div>
-                                    <div className="flex justify-between text-base">
                                         <span className="text-brand-olive-dark font-black">Total Price</span>
                                         <RupeeAmount className="font-serif font-black text-2xl text-brand-olive-dark" value={totalPrice} />
                                     </div>

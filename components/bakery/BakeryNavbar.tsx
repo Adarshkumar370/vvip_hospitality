@@ -79,15 +79,15 @@ export default function BakeryNavbar() {
         <>
             <nav
                 className={cn(
-                    "fixed top-0 left-0 right-0 z-50 transition-all duration-500 px-6 py-6",
-                    showSolidNav ? "py-4" : "py-8"
+                    "fixed top-0 left-0 right-0 z-50 transition-all duration-500 px-4 py-4 md:px-6 md:py-6",
+                    showSolidNav ? "py-2 md:py-4" : "py-4 md:py-8"
                 )}
             >
                 <div
                     className={cn(
-                        "max-w-7xl mx-auto rounded-full transition-all duration-700 flex items-center justify-between px-10 py-4 border",
+                        "max-w-7xl mx-auto rounded-full transition-all duration-700 flex items-center justify-between px-4 py-2.5 sm:px-6 md:px-10 md:py-4 border",
                         showSolidNav
-                            ? "bg-white/90 backdrop-blur-2xl shadow-premium py-3 border-gray-100"
+                            ? "bg-white/90 backdrop-blur-2xl shadow-premium py-2 md:py-3 border-gray-100"
                             : "bg-transparent border-transparent"
                     )}
                 >
@@ -247,7 +247,7 @@ export default function BakeryNavbar() {
                         initial={{ opacity: 0, y: -20 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -20 }}
-                        className="fixed inset-0 z-40 bg-white pt-32 px-10 md:hidden"
+                        className="fixed inset-0 z-40 bg-white pt-24 pb-12 px-6 sm:px-10 md:hidden overflow-y-auto"
                     >
                         <div className="flex flex-col gap-8">
                             {navLinks.map((link) => (

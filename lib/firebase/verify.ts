@@ -1,7 +1,9 @@
 import * as jose from "jose";
+import { EXTERNAL_API_TIMEOUT_MS } from "@/lib/timeout";
 
 const FIREBASE_JWKS = jose.createRemoteJWKSet(
-    new URL("https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com")
+    new URL("https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com"),
+    { timeoutDuration: EXTERNAL_API_TIMEOUT_MS }
 );
 
 export async function verifyFirebaseIdToken(idToken: string) {

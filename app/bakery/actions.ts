@@ -10,6 +10,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { unstable_cache, revalidatePath } from "next/cache";
 import { adminSessionOptions, type AdminSessionData, staffSessionOptions, type StaffSessionData, userSessionOptions, type UserSessionData } from "@/lib/session";
+import { EXTERNAL_API_TIMEOUT_MS, INVOICE_API_TIMEOUT_MS, getSafeErrorMessage, isTimeoutError, withTimeout } from "@/lib/timeout";
 import Razorpay from "razorpay";
 import * as crypto from "crypto";
 
@@ -73,6 +74,21 @@ const addressSchema = z.object({
     pincode: z.string().regex(/^\d{6}$/, "Must be a 6-digit pincode"),
     is_default: z.boolean().default(false),
 });
+
+const orderIssueTypes = ["quality", "missing_item", "wrong_item", "delivery", "payment", "other"] as const;
+
+const orderIssueSchema = z.object({
+    orderId: z.string().uuid(),
+    issueType: z.enum(orderIssueTypes),
+    description: z.string().min(3).max(2000).trim(),
+});
+
+type ServerUploadFile = {
+    name: string;
+    type: string;
+    size: number;
+    arrayBuffer: () => Promise<ArrayBuffer>;
+};
 
 const uuidId = z.string().uuid();
 
@@ -407,6 +423,31 @@ function toAddressView(address: any) {
     };
 }
 
+function getStoragePublicUrl(bucket: string, key: string) {
+    if (process.env.SUPABASE_PUBLIC_STORAGE_URL) {
+        return `${process.env.SUPABASE_PUBLIC_STORAGE_URL.replace(/\/$/, "")}/${bucket}/${key}`;
+    }
+
+    if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
+        return `${process.env.NEXT_PUBLIC_SUPABASE_URL.replace(/\/$/, "")}/storage/v1/object/public/${bucket}/${key}`;
+    }
+
+    const projectId = process.env.SUPABASE_PROJECT_ID;
+    return `https://${projectId}.supabase.co/storage/v1/object/public/${bucket}/${key}`;
+}
+
+function isServerUploadFile(value: FormDataEntryValue): boolean {
+    return (
+        typeof value === "object" &&
+        value !== null &&
+        "arrayBuffer" in value &&
+        typeof (value as { arrayBuffer?: unknown }).arrayBuffer === "function" &&
+        "size" in value &&
+        typeof (value as { size?: unknown }).size === "number" &&
+        (value as { size: number }).size > 0
+    );
+}
+
 function toStaffView(staff: any) {
     const role = toStaffRole(staff.designation || staff.role);
     return {
@@ -548,7 +589,11 @@ export async function verifyFirebaseToken(idToken: string, phone: string) {
 
     try {
         const { verifyFirebaseIdToken } = await import("@/lib/firebase/verify");
-        const decoded = await verifyFirebaseIdToken(idToken);
+        const decoded = await withTimeout(
+            verifyFirebaseIdToken(idToken),
+            EXTERNAL_API_TIMEOUT_MS,
+            "Firebase token verification"
+        );
 
         const firebasePhone = decoded.phone_number;
         const expectedPhone = normalizeMobileNo(parsed.data);
@@ -568,7 +613,10 @@ export async function verifyFirebaseToken(idToken: string, phone: string) {
         return { success: true as const };
     } catch (err: any) {
         console.error("Firebase token verification failed:", err?.code, err?.message, err);
-        return { success: false as const, error: "Verification failed. Please try again." };
+        return {
+            success: false as const,
+            error: getSafeErrorMessage(err, "Verification failed. Please try again."),
+        };
     }
 }
 
@@ -1068,14 +1116,15 @@ export async function uploadImage(formData: FormData) {
 
         await s3Client.send(command);
 
-        // Construct Public URL
-        const projectId = process.env.SUPABASE_PROJECT_ID;
-        const publicUrl = `https://${projectId}.supabase.co/storage/v1/object/public/${bucket}/${filePath}`;
+        const publicUrl = getStoragePublicUrl(bucket, filePath);
 
         return { success: true, url: publicUrl };
     } catch (err: any) {
         console.error("Image upload failed:", err);
-        return { success: false, error: err.message };
+        return {
+            success: false,
+            error: getSafeErrorMessage(err, "Image upload failed. Please try again."),
+        };
     }
 }
 
@@ -1287,6 +1336,115 @@ export async function getOrders() {
     } catch (err) {
         console.error("Failed to fetch orders:", err);
         return { success: false as const, error: "Database error" };
+    }
+}
+
+const ORDER_FEEDBACK_STATUSES = ["open", "in_review", "resolved", "closed"] as const;
+
+async function canManageOrderFeedback() {
+    const staffSession = await getIronSession<StaffSessionData>(await cookies(), staffSessionOptions);
+    const sessionStaff = staffSession.staff;
+    if (sessionStaff?.id && ["manager", "admin"].includes(sessionStaff.role)) {
+        return true;
+    }
+
+    const adminSession = await getAdminSessionInternal();
+    return Boolean(adminSession.isAdmin);
+}
+
+export async function getOrderFeedbackTickets() {
+    try {
+        if (!(await canManageOrderFeedback())) {
+            return { success: false as const, error: "Only managers and admins can view order issue tickets.", tickets: [] };
+        }
+
+        const tickets = await sql`
+            SELECT
+                ofb.id,
+                ofb.order_id,
+                ofb.user_id,
+                ofb.issue_type,
+                ofb.description,
+                ofb.image_urls,
+                ofb.status,
+                ofb.created_at,
+                ofb.updated_at,
+                o.order_number,
+                o.total_amount,
+                o.order_status,
+                u.first_name,
+                u.last_name,
+                u.email,
+                u.mobile_no
+            FROM order_feedback ofb
+            JOIN orders o ON o.id = ofb.order_id
+            JOIN app_users u ON u.id = ofb.user_id
+            ORDER BY
+                CASE ofb.status
+                    WHEN 'open' THEN 1
+                    WHEN 'in_review' THEN 2
+                    WHEN 'resolved' THEN 3
+                    ELSE 4
+                END,
+                ofb.created_at DESC
+        `;
+
+        return {
+            success: true as const,
+            tickets: tickets.map((ticket: any) => ({
+                id: ticket.id,
+                order_id: ticket.order_id,
+                user_id: ticket.user_id,
+                issue_type: ticket.issue_type,
+                description: ticket.description,
+                image_urls: Array.isArray(ticket.image_urls) ? ticket.image_urls : [],
+                status: ticket.status,
+                created_at: ticket.created_at,
+                updated_at: ticket.updated_at,
+                order_number: ticket.order_number,
+                order_status: toLegacyOrderStatus(ticket.order_status),
+                total_price: Number(ticket.total_amount || 0),
+                user_name: combineName(ticket.first_name, ticket.last_name),
+                user_email: ticket.email,
+                user_phone: denormalizeMobileNo(ticket.mobile_no),
+            })),
+        };
+    } catch (err) {
+        console.error("Failed to fetch order feedback tickets:", err);
+        return { success: false as const, error: "Could not load issue tickets.", tickets: [] };
+    }
+}
+
+export async function updateOrderFeedbackStatus(ticketId: string, status: string) {
+    if (!isUuid(ticketId)) {
+        return { success: false as const, error: "Invalid ticket ID" };
+    }
+
+    const parsedStatus = z.enum(ORDER_FEEDBACK_STATUSES).safeParse(status);
+    if (!parsedStatus.success) {
+        return { success: false as const, error: "Invalid ticket status" };
+    }
+
+    try {
+        if (!(await canManageOrderFeedback())) {
+            return { success: false as const, error: "Only managers and admins can update order issue tickets." };
+        }
+
+        const [ticket] = await sql`
+            UPDATE order_feedback
+            SET status = ${parsedStatus.data}
+            WHERE id = ${ticketId}
+            RETURNING id
+        `;
+
+        if (!ticket) {
+            return { success: false as const, error: "Ticket not found" };
+        }
+
+        return { success: true as const };
+    } catch (err) {
+        console.error("Failed to update order feedback status:", err);
+        return { success: false as const, error: "Could not update ticket status." };
     }
 }
 
@@ -1549,7 +1707,11 @@ export async function retryStaffInvoiceGeneration(orderId: string) {
         }
 
         const { generateAndUploadInvoicePdfForOrder } = await import("@/lib/invoice-service");
-        const invoice = await generateAndUploadInvoicePdfForOrder(sql, orderId);
+        const invoice = await withTimeout(
+            generateAndUploadInvoicePdfForOrder(sql, orderId),
+            INVOICE_API_TIMEOUT_MS,
+            "Invoice generation"
+        );
         return {
             success: true as const,
             invoicePdfUrl: invoice.invoicePdfUrl,
@@ -1557,7 +1719,10 @@ export async function retryStaffInvoiceGeneration(orderId: string) {
         };
     } catch (err: any) {
         console.error("Failed to generate invoice from staff portal:", err);
-        return { success: false as const, error: err?.message || "Invoice generation failed" };
+        return {
+            success: false as const,
+            error: getSafeErrorMessage(err, err?.message || "Invoice generation failed"),
+        };
     }
 }
 
@@ -1764,6 +1929,171 @@ export async function getUserOrders(userId: string | number) {
     }
 }
 
+export async function getOrderIssueContext(orderId: string) {
+    if (!isUuid(orderId)) {
+        return { success: false as const, error: "Invalid order ID" };
+    }
+
+    try {
+        const sessionUser = await getUserSession();
+        if (!sessionUser || !isUuid(sessionUser.id)) {
+            return { success: false as const, error: "Unauthorized. Please sign in again." };
+        }
+
+        const [order] = await sql`
+            SELECT id, order_number, total_amount, order_status, created_at
+            FROM orders
+            WHERE id = ${orderId}
+              AND user_id = ${sessionUser.id}
+        `;
+
+        if (!order) {
+            return { success: false as const, error: "Order not found" };
+        }
+
+        return {
+            success: true as const,
+            order: {
+                id: order.id,
+                order_number: order.order_number,
+                total_price: Number(order.total_amount || 0),
+                status: toLegacyOrderStatus(order.order_status),
+                created_at: order.created_at,
+            },
+        };
+    } catch (err) {
+        console.error("Failed to load order issue context:", err);
+        return { success: false as const, error: "Could not load order details" };
+    }
+}
+
+export async function submitOrderIssue(formData: FormData) {
+    try {
+        const sessionUser = await getUserSession();
+        if (!sessionUser || !isUuid(sessionUser.id)) {
+            return { success: false as const, error: "Unauthorized. Please sign in again." };
+        }
+
+        const parsed = orderIssueSchema.safeParse({
+            orderId: formData.get("orderId"),
+            issueType: formData.get("issueType"),
+            description: formData.get("description"),
+        });
+
+        if (!parsed.success) {
+            return {
+                success: false as const,
+                error: parsed.error.issues[0]?.message || "Invalid issue details",
+            };
+        }
+
+        const [order] = await sql`
+            SELECT id
+            FROM orders
+            WHERE id = ${parsed.data.orderId}
+              AND user_id = ${sessionUser.id}
+        `;
+
+        if (!order) {
+            return { success: false as const, error: "Order not found" };
+        }
+
+        const files = formData
+            .getAll("images")
+            .filter(isServerUploadFile) as ServerUploadFile[];
+
+        if (files.length > 3) {
+            return { success: false as const, error: "You can upload up to 3 images." };
+        }
+
+        const bucket = process.env.SUPABASE_ORDER_FEEDBACK_BUCKET || "order-feedback";
+        const uploadedImages: Array<{
+            url: string;
+            bucket: string;
+            key: string;
+            contentType: string;
+            size: number;
+            originalName: string;
+        }> = [];
+
+        for (const file of files) {
+            const fileExt = ALLOWED_MIME_EXTENSIONS[file.type];
+            if (!fileExt) {
+                return { success: false as const, error: "Only JPEG, PNG, WebP, or GIF images are allowed." };
+            }
+
+            const MAX_OPTIMIZED_SIZE = 2 * 1024 * 1024;
+            if (file.size > MAX_OPTIMIZED_SIZE) {
+                return { success: false as const, error: "Each optimized image must be 2MB or smaller." };
+            }
+
+            const key = `order-feedback/${parsed.data.orderId}/${crypto.randomUUID()}.${fileExt}`;
+            const buffer = Buffer.from(await file.arrayBuffer());
+
+            try {
+                await s3Client.send(new PutObjectCommand({
+                    Bucket: bucket,
+                    Key: key,
+                    Body: buffer,
+                    ContentType: file.type,
+                    CacheControl: "private, max-age=0, no-cache",
+                }));
+            } catch (uploadErr) {
+                console.error("Failed to upload order issue image:", uploadErr);
+                return {
+                    success: false as const,
+                    error: getSafeErrorMessage(uploadErr, "Could not upload the selected image. Please try a smaller image."),
+                };
+            }
+
+            uploadedImages.push({
+                url: getStoragePublicUrl(bucket, key),
+                bucket,
+                key,
+                contentType: file.type,
+                size: file.size,
+                originalName: file.name,
+            });
+        }
+
+        let feedback;
+        try {
+            [feedback] = await sql`
+                INSERT INTO order_feedback (
+                    order_id,
+                    user_id,
+                    issue_type,
+                    description,
+                    image_urls
+                )
+                VALUES (
+                    ${parsed.data.orderId},
+                    ${sessionUser.id},
+                    ${parsed.data.issueType},
+                    ${parsed.data.description},
+                    ${sql.json(uploadedImages)}
+                )
+                RETURNING id
+            `;
+        } catch (dbErr) {
+            console.error("Failed to insert order issue:", dbErr);
+            return {
+                success: false as const,
+                error: getSafeErrorMessage(dbErr, "Could not save your issue. Please try again."),
+            };
+        }
+
+        revalidatePath("/bakery/settings");
+        return { success: true as const, feedbackId: feedback.id };
+    } catch (err) {
+        console.error("Failed to submit order issue:", err);
+        return {
+            success: false as const,
+            error: getSafeErrorMessage(err, "Could not submit your issue. Please try again."),
+        };
+    }
+}
+
 // --- Checkout & Payments ---
 
 let razorpayInstance: any = null;
@@ -1836,7 +2166,11 @@ export async function createRazorpayOrder(amount: number, localOrderId?: string 
         const rzp = getRazorpay();
         if (!rzp) return { success: false, error: "Payment system is not configured." };
 
-        const order = await rzp.orders.create(options);
+        const order: any = await withTimeout(
+            rzp.orders.create(options),
+            EXTERNAL_API_TIMEOUT_MS,
+            "Razorpay order creation"
+        );
         if (localOrder) {
             await sql`
                 INSERT INTO payments (
@@ -1862,7 +2196,10 @@ export async function createRazorpayOrder(amount: number, localOrderId?: string 
     } catch (err: any) {
         const detail = err?.error?.description || err?.message || String(err);
         console.error("Razorpay Order Creation Failed:", detail, err);
-        return { success: false, error: `Payment error: ${detail}` };
+        return {
+            success: false,
+            error: isTimeoutError(err) ? "Payment gateway timed out. Please try again." : `Payment error: ${detail}`,
+        };
     }
 }
 
@@ -1946,11 +2283,21 @@ export async function verifyRazorpayPayment(
 
             try {
                 const { generateAndUploadInvoicePdfForOrder } = await import("@/lib/invoice-service");
-                const invoice = await generateAndUploadInvoicePdfForOrder(sql, orderId);
+                const invoice = await withTimeout(
+                    generateAndUploadInvoicePdfForOrder(sql, orderId),
+                    INVOICE_API_TIMEOUT_MS,
+                    "Invoice generation"
+                );
                 return { success: true, invoice };
             } catch (invoiceErr) {
                 console.error("Invoice PDF upload failed after successful payment:", invoiceErr);
-                return { success: true, invoiceError: "Payment captured, but invoice PDF upload failed." };
+                return {
+                    success: true,
+                    invoiceError: getSafeErrorMessage(
+                        invoiceErr,
+                        "Payment captured, but invoice PDF upload failed."
+                    ),
+                };
             }
         }
 
@@ -2603,11 +2950,18 @@ export async function retryInvoiceGeneration(orderId: string, userId: string) {
         }
 
         const { generateAndUploadInvoicePdfForOrder } = await import("@/lib/invoice-service");
-        const invoice = await generateAndUploadInvoicePdfForOrder(sql, orderId);
+        const invoice = await withTimeout(
+            generateAndUploadInvoicePdfForOrder(sql, orderId),
+            INVOICE_API_TIMEOUT_MS,
+            "Invoice generation"
+        );
         return { success: true, invoicePdfUrl: invoice.invoicePdfUrl, invoiceNumber: invoice.invoiceNumber };
     } catch (err: any) {
         console.error("Failed to retry invoice generation:", err);
-        return { success: false, error: err?.message || "Invoice generation failed" };
+        return {
+            success: false,
+            error: getSafeErrorMessage(err, err?.message || "Invoice generation failed"),
+        };
     }
 }
 

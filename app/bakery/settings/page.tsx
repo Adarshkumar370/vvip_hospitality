@@ -17,7 +17,8 @@ import {
     Loader2,
     ArrowLeft,
     LogOut,
-    Download
+    Download,
+    AlertCircle
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
@@ -333,7 +334,7 @@ export default function SettingsPage() {
     ];
 
     return (
-        <div className="min-h-screen bg-brand-soft-gray pt-32 pb-20 px-6">
+        <div className="min-h-screen bg-brand-soft-gray pt-28 md:pt-32 pb-16 md:pb-20 px-4 sm:px-6">
             <div className="max-w-5xl mx-auto">
                 {/* Header */}
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
@@ -376,7 +377,7 @@ export default function SettingsPage() {
                     </aside>
 
                     {/* Main Content */}
-                    <main className="lg:col-span-3 bg-white rounded-[2.5rem] p-8 md:p-12 shadow-premium border border-white min-h-[500px]">
+                    <main className="lg:col-span-3 bg-white rounded-[1.5rem] sm:rounded-[2.5rem] p-5 sm:p-8 md:p-12 shadow-premium border border-white min-h-[500px]">
                         <AnimatePresence mode="wait">
                             {/* Feedback Message */}
                             {message && (
@@ -487,7 +488,7 @@ export default function SettingsPage() {
                                                 </div>
                                             ) : (
                                                 addresses.map((addr) => (
-                                                    <div key={addr.id} className="bg-brand-soft-gray p-6 rounded-3xl border border-white flex justify-between items-start group hover:shadow-md transition-all">
+                                                    <div key={addr.id} className="bg-brand-soft-gray p-6 rounded-3xl border border-white flex flex-col sm:flex-row gap-4 sm:gap-6 justify-between items-start sm:items-center group hover:shadow-md transition-all">
                                                         <div className="space-y-1">
                                                             <div className="flex items-center gap-3">
                                                                 <p className="font-black text-brand-olive-dark">{addr.receiver_name}</p>
@@ -653,6 +654,14 @@ export default function SettingsPage() {
                                                                 </button>
                                                             )}
 
+                                                            <Link
+                                                                href={`/bakery/orders/${order.id}/issue`}
+                                                                className="ml-0 inline-flex items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-red-600 shadow-sm transition-all hover:border-red-200 hover:bg-red-100 sm:ml-3"
+                                                            >
+                                                                <AlertCircle size={14} aria-hidden="true" />
+                                                                Raise Issue
+                                                            </Link>
+
                                                             {/* Items */}
                                                             <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
                                                                 {order.items.map((item: any) => (
@@ -774,7 +783,7 @@ export default function SettingsPage() {
                             initial={{ opacity: 0, scale: 0.95, y: 20 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                            className="relative w-full max-w-xl bg-white rounded-[3rem] p-10 md:p-12 shadow-2xl overflow-y-auto max-h-[90vh] custom-scrollbar"
+                            className="relative w-full max-w-xl bg-white rounded-[1.5rem] sm:rounded-[3rem] p-6 sm:p-8 md:p-12 shadow-2xl overflow-y-auto max-h-[90vh] custom-scrollbar"
                         >
                             <h3 className="text-3xl font-serif font-black text-brand-olive-dark mb-2">
                                 {editingAddress ? "Edit" : "New"} <span className="text-brand-gold-bright italic">Address</span>

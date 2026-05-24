@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     ArrowRight,
+    AlertCircle,
     CheckCircle2,
     ChefHat,
     ClipboardList,
@@ -25,7 +26,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { RupeeAmount } from "@/components/ui/RupeeAmount";
-import { getAddresses, getOrders, getProducts, getProductsForUser, getStaffSession, getUserBillingSummary, getUsers, logoutStaff, retryStaffInvoiceGeneration, staffLogin, staffPlaceOrder, updateOrderStatus, updateProductDailyLimitForStaff } from "@/app/bakery/actions";
+import { getAddresses, getOrderFeedbackTickets, getOrders, getProducts, getProductsForUser, getStaffSession, getUserBillingSummary, getUsers, logoutStaff, retryStaffInvoiceGeneration, staffLogin, staffPlaceOrder, updateOrderFeedbackStatus, updateOrderStatus, updateProductDailyLimitForStaff } from "@/app/bakery/actions";
 import { formatOrderDisplayNumber } from "@/lib/order-display";
 
 type StaffRole = "baker" | "delivery" | "manager" | "accountant" | "admin";
@@ -72,6 +73,32 @@ type OrderRecord = {
     items: OrderItem[];
 };
 
+type OrderFeedbackStatus = "open" | "in_review" | "resolved" | "closed";
+
+type OrderFeedbackImage = {
+    url: string;
+    key?: string;
+    contentType?: string;
+    originalName?: string;
+};
+
+type OrderFeedbackTicket = {
+    id: string;
+    order_id: string;
+    issue_type: string;
+    description: string;
+    image_urls: OrderFeedbackImage[];
+    status: OrderFeedbackStatus;
+    created_at: string;
+    updated_at: string;
+    order_number?: string;
+    order_status?: string;
+    total_price?: number;
+    user_name?: string;
+    user_email?: string;
+    user_phone?: string;
+};
+
 type ProductRecord = {
     id: string;
     name: string;
@@ -108,8 +135,22 @@ type BillingSummaryRecord = {
     availableCredit: number;
 };
 
+type ProductionSummaryItem = {
+    productName: string;
+    productImage: string;
+    quantity: number;
+    orderCount: number;
+};
+
 const ORDERS_PER_PAGE = 50;
+const FEEDBACK_TICKETS_PER_PAGE = 20;
 const ACCOUNTANT_FILTER_DAYS = [1, 7, 30] as const;
+const ISSUE_STATUS_OPTIONS: Array<{ value: OrderFeedbackStatus; label: string }> = [
+    { value: "open", label: "Open" },
+    { value: "in_review", label: "In Review" },
+    { value: "resolved", label: "Resolved" },
+    { value: "closed", label: "Closed" },
+];
 
 function isOperationallyClearedPayment(status: string) {
     return status === "paid" || status === "postpaid-pending";
@@ -324,7 +365,7 @@ export function StaffRolePortal({ portalKey }: { portalKey: PortalKey }) {
     );
     const [staff, setStaff] = useState<StaffMember | null>(null);
     const [isCheckingSession, setIsCheckingSession] = useState(true);
-    const [activeSection, setActiveSection] = useState<"orders" | "limits" | "create">("orders");
+    const [activeSection, setActiveSection] = useState<"orders" | "limits" | "create" | "feedback">("orders");
 
     useEffect(() => {
         const checkSession = async () => {
@@ -419,6 +460,18 @@ export function StaffRolePortal({ portalKey }: { portalKey: PortalKey }) {
                                     Order Queue
                                 </button>
                                 <button
+                                    onClick={() => setActiveSection("feedback")}
+                                    className={cn(
+                                        "flex items-center gap-3 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-widest transition-all",
+                                        activeSection === "feedback"
+                                            ? "bg-brand-olive-dark text-brand-gold-bright"
+                                            : "text-gray-400 hover:bg-brand-soft-gray hover:text-brand-olive-dark"
+                                    )}
+                                >
+                                    <AlertCircle size={18} />
+                                    User Issues
+                                </button>
+                                <button
                                     onClick={() => setActiveSection("limits")}
                                     className={cn(
                                         "flex items-center gap-3 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-widest transition-all",
@@ -491,17 +544,20 @@ function StaffDashboard({
 }: {
     staff: StaffMember;
     portalLabel: string;
-    activeSection: "orders" | "limits" | "create";
+    activeSection: "orders" | "limits" | "create" | "feedback";
 }) {
     const [orders, setOrders] = useState<OrderRecord[]>([]);
+    const [feedbackTickets, setFeedbackTickets] = useState<OrderFeedbackTicket[]>([]);
     const [products, setProducts] = useState<ProductRecord[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isLoadingFeedback, setIsLoadingFeedback] = useState(true);
     const [isLoadingProducts, setIsLoadingProducts] = useState(true);
     const [activeTab, setActiveTab] = useState<"pending" | "active" | "completed">("pending");
     const [currentPage, setCurrentPage] = useState(1);
     const [accountantFilterDays, setAccountantFilterDays] = useState<1 | 7 | 30>(1);
     const [actionMessage, setActionMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
     const [activeOrderActionId, setActiveOrderActionId] = useState<string | null>(null);
+    const [activeFeedbackTicketId, setActiveFeedbackTicketId] = useState<string | null>(null);
     const [productLimitDrafts, setProductLimitDrafts] = useState<Record<string, number>>({});
     const [activeProductLimitId, setActiveProductLimitId] = useState<string | null>(null);
 
@@ -527,6 +583,21 @@ function StaffDashboard({
         }
         setIsLoadingProducts(false);
     };
+
+    const loadFeedbackTickets = useCallback(async () => {
+        if (!["manager", "admin"].includes(staff.role)) {
+            setIsLoadingFeedback(false);
+            return;
+        }
+
+        const result = await getOrderFeedbackTickets();
+        if (result.success) {
+            setFeedbackTickets((result.tickets || []) as OrderFeedbackTicket[]);
+        } else {
+            setActionMessage({ type: "error", text: result.error || "Failed to load issue tickets." });
+        }
+        setIsLoadingFeedback(false);
+    }, [staff.role]);
 
     const runOrderAction = async (
         orderId: string,
@@ -631,6 +702,24 @@ function StaffDashboard({
         }
     };
 
+    const handleFeedbackStatusChange = async (ticketId: string, status: OrderFeedbackStatus) => {
+        setActiveFeedbackTicketId(ticketId);
+        setActionMessage(null);
+
+        try {
+            const result = await updateOrderFeedbackStatus(ticketId, status);
+            if (!result.success) {
+                setActionMessage({ type: "error", text: result.error || "Failed to update ticket status." });
+                return;
+            }
+
+            await loadFeedbackTickets();
+            setActionMessage({ type: "success", text: "Issue ticket updated." });
+        } finally {
+            setActiveFeedbackTicketId(null);
+        }
+    };
+
     const accountantOrders = useMemo(
         () => orders.filter((order) => order.payment_status === "paid" && isWithinLastDays(order.payment_received_at, accountantFilterDays)),
         [orders, accountantFilterDays]
@@ -677,6 +766,45 @@ function StaffDashboard({
         active: tabbedOrders.active.length,
         completed: tabbedOrders.completed.length,
     };
+    const bakerWorkOrders = useMemo(
+        () => staff.role === "baker" ? [...tabbedOrders.pending, ...tabbedOrders.active] : [],
+        [staff.role, tabbedOrders]
+    );
+    const bakerProductionSummary = useMemo<ProductionSummaryItem[]>(() => {
+        const summary = new Map<string, {
+            productName: string;
+            productImage: string;
+            quantity: number;
+            orderIds: Set<string>;
+        }>();
+
+        for (const order of bakerWorkOrders) {
+            for (const item of order.items) {
+                const key = item.product_name.trim().toLowerCase();
+                const existing = summary.get(key);
+                if (existing) {
+                    existing.quantity += Number(item.quantity || 0);
+                    existing.orderIds.add(order.id);
+                } else {
+                    summary.set(key, {
+                        productName: item.product_name,
+                        productImage: item.product_image,
+                        quantity: Number(item.quantity || 0),
+                        orderIds: new Set([order.id]),
+                    });
+                }
+            }
+        }
+
+        return Array.from(summary.values())
+            .map((item) => ({
+                productName: item.productName,
+                productImage: item.productImage,
+                quantity: item.quantity,
+                orderCount: item.orderIds.size,
+            }))
+            .sort((a, b) => b.quantity - a.quantity || a.productName.localeCompare(b.productName));
+    }, [bakerWorkOrders]);
     const isReadOnly = staff.role === "accountant";
     const hasTabs = !["accountant", "admin", "manager"].includes(staff.role);
     const filteredCollection = staff.role === "accountant"
@@ -689,6 +817,10 @@ function StaffDashboard({
     useEffect(() => {
         setCurrentPage(1);
     }, [activeTab, staff.role]);
+
+    useEffect(() => {
+        loadFeedbackTickets();
+    }, [loadFeedbackTickets]);
 
     useEffect(() => {
         if (currentPage > totalPages) {
@@ -783,6 +915,14 @@ function StaffDashboard({
                 </div>
             ) : null}
 
+            {staff.role === "baker" && activeSection === "orders" ? (
+                <BakerProductionSummary
+                    items={bakerProductionSummary}
+                    orderCount={bakerWorkOrders.length}
+                    isLoading={isLoading}
+                />
+            ) : null}
+
             {(staff.role === "manager" || staff.role === "admin") && activeSection === "limits" ? (
                 <div className="rounded-[2.5rem] bg-white p-8 shadow-premium">
                     <div className="mb-6 flex items-center justify-between gap-4">
@@ -852,6 +992,15 @@ function StaffDashboard({
                             setActionMessage({ type: "error", text: refresh.error || "Order placed, but refresh failed." });
                         }
                     }}
+                />
+            ) : null}
+
+            {["admin", "manager"].includes(staff.role) && activeSection === "feedback" ? (
+                <ManagerFeedbackPanel
+                    tickets={feedbackTickets}
+                    isLoading={isLoadingFeedback}
+                    activeTicketId={activeFeedbackTicketId}
+                    onStatusChange={handleFeedbackStatusChange}
                 />
             ) : null}
 
@@ -951,6 +1100,264 @@ function StaffDashboard({
                 </div>
             ) : null}
         </div>
+    );
+}
+
+function BakerProductionSummary({
+    items,
+    orderCount,
+    isLoading,
+}: {
+    items: ProductionSummaryItem[];
+    orderCount: number;
+    isLoading: boolean;
+}) {
+    const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0);
+
+    return (
+        <section className="rounded-[2.5rem] bg-white p-8 shadow-premium">
+            <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                    <p className="mb-1 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.3em] text-brand-gold-bright">
+                        <ChefHat size={16} />
+                        Production Summary
+                    </p>
+                    <h3 className="text-2xl font-serif font-black text-brand-olive-dark">Products to Make</h3>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-2xl bg-brand-soft-gray px-5 py-4 text-right">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Orders</p>
+                        <p className="text-2xl font-serif font-black text-brand-olive-dark">{orderCount}</p>
+                    </div>
+                    <div className="rounded-2xl bg-brand-soft-gray px-5 py-4 text-right">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Total Qty</p>
+                        <p className="text-2xl font-serif font-black text-brand-olive-dark">{totalQuantity}</p>
+                    </div>
+                </div>
+            </div>
+
+            {isLoading ? (
+                <div className="flex justify-center py-12">
+                    <Loader2 className="animate-spin text-brand-gold-bright" size={32} />
+                </div>
+            ) : items.length === 0 ? (
+                <div className="rounded-[2rem] border-4 border-dashed border-brand-soft-gray py-12 text-center">
+                    <Package className="mx-auto mb-4 text-brand-soft-gray" size={44} />
+                    <p className="text-xs font-black uppercase tracking-widest text-gray-400">No products pending for production</p>
+                </div>
+            ) : (
+                <div className="grid gap-4 md:grid-cols-2">
+                    {items.map((item) => (
+                        <div key={item.productName} className="flex items-center gap-4 rounded-[2rem] bg-brand-soft-gray/50 p-4">
+                            <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-white shadow-sm">
+                                <Image src={item.productImage} alt={item.productName} fill sizes="64px" className="object-cover" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-black text-brand-olive-dark">{item.productName}</p>
+                                <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-gray-400">
+                                    {item.orderCount} order{item.orderCount === 1 ? "" : "s"}
+                                </p>
+                            </div>
+                            <div className="rounded-2xl bg-white px-5 py-3 text-center shadow-sm">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Qty</p>
+                                <p className="text-2xl font-serif font-black text-brand-gold-bright">{item.quantity}</p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </section>
+    );
+}
+
+function ManagerFeedbackPanel({
+    tickets,
+    isLoading,
+    activeTicketId,
+    onStatusChange,
+}: {
+    tickets: OrderFeedbackTicket[];
+    isLoading: boolean;
+    activeTicketId: string | null;
+    onStatusChange: (ticketId: string, status: OrderFeedbackStatus) => void;
+}) {
+    const [filter, setFilter] = useState<"active" | "closed">("active");
+    const [currentPage, setCurrentPage] = useState(1);
+    const filteredTickets = useMemo(
+        () => tickets.filter((ticket) =>
+            filter === "active"
+                ? ticket.status === "open" || ticket.status === "in_review"
+                : ticket.status === "resolved" || ticket.status === "closed"
+        ),
+        [filter, tickets]
+    );
+    const totalPages = Math.max(1, Math.ceil(filteredTickets.length / FEEDBACK_TICKETS_PER_PAGE));
+    const paginatedTickets = filteredTickets.slice(
+        (currentPage - 1) * FEEDBACK_TICKETS_PER_PAGE,
+        currentPage * FEEDBACK_TICKETS_PER_PAGE
+    );
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [filter]);
+
+    useEffect(() => {
+        if (currentPage > totalPages) {
+            setCurrentPage(totalPages);
+        }
+    }, [currentPage, totalPages]);
+
+    const getStatusStyles = (status: OrderFeedbackStatus) => {
+        switch (status) {
+            case "open":
+                return "bg-red-50 text-red-600 border-red-100";
+            case "in_review":
+                return "bg-amber-50 text-amber-700 border-amber-100";
+            case "resolved":
+                return "bg-green-50 text-green-700 border-green-100";
+            case "closed":
+                return "bg-gray-100 text-gray-600 border-gray-200";
+        }
+    };
+
+    return (
+        <section className="rounded-[2.5rem] bg-white p-8 shadow-premium">
+            <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                <div>
+                    <p className="mb-1 text-[10px] font-black uppercase tracking-[0.3em] text-brand-gold-bright">Customer Issues</p>
+                    <h3 className="text-2xl font-serif font-black text-brand-olive-dark">User Issues</h3>
+                </div>
+                <div className="rounded-2xl bg-brand-soft-gray px-5 py-4 text-sm font-black text-brand-olive-dark">
+                    {tickets.filter((ticket) => ticket.status === "open" || ticket.status === "in_review").length} Active
+                </div>
+            </div>
+
+            <div className="mb-6 flex w-fit gap-2 rounded-3xl bg-brand-soft-gray/50 p-2">
+                {[
+                    { id: "active", label: `Active (${tickets.filter((ticket) => ticket.status === "open" || ticket.status === "in_review").length})` },
+                    { id: "closed", label: `Closed (${tickets.filter((ticket) => ticket.status === "resolved" || ticket.status === "closed").length})` },
+                ].map((tab) => (
+                    <button
+                        key={tab.id}
+                        onClick={() => setFilter(tab.id as "active" | "closed")}
+                        className={cn(
+                            "rounded-2xl px-6 py-3 text-[10px] font-black uppercase tracking-widest transition-all",
+                            filter === tab.id
+                                ? "bg-brand-olive-dark text-white shadow-lg"
+                                : "text-gray-400 hover:text-brand-olive-dark"
+                        )}
+                    >
+                        {tab.label}
+                    </button>
+                ))}
+            </div>
+
+            {isLoading ? (
+                <div className="flex justify-center py-20">
+                    <Loader2 className="animate-spin text-brand-gold-bright" size={36} />
+                </div>
+            ) : filteredTickets.length === 0 ? (
+                <div className="rounded-[2rem] border-4 border-dashed border-brand-soft-gray py-24 text-center">
+                    <AlertCircle className="mx-auto mb-5 text-brand-soft-gray" size={54} />
+                    <p className="text-sm font-bold uppercase tracking-widest text-gray-400">
+                        No {filter} user issues
+                    </p>
+                </div>
+            ) : (
+                <>
+                    <div className="space-y-5">
+                    {paginatedTickets.map((ticket) => (
+                            <div key={ticket.id} className="rounded-[2rem] border border-brand-olive-dark/5 bg-brand-soft-gray/35 p-5">
+                            <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                                <div>
+                                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                                        <span className="text-lg font-black text-brand-olive-dark">
+                                            #{formatOrderDisplayNumber({ order_number: ticket.order_number, id: ticket.order_id })}
+                                        </span>
+                                        <span className={cn("rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest", getStatusStyles(ticket.status))}>
+                                            {ticket.status.replace("_", " ")}
+                                        </span>
+                                    </div>
+                                    <p className="text-xs font-bold text-gray-500">
+                                        {ticket.user_name || "Customer"} · {ticket.user_phone || ticket.user_email || "No contact"} · {new Date(ticket.created_at).toLocaleString()}
+                                    </p>
+                                </div>
+
+                                <select
+                                    value={ticket.status}
+                                    disabled={activeTicketId === ticket.id}
+                                    onChange={(event) => onStatusChange(ticket.id, event.target.value as OrderFeedbackStatus)}
+                                    className="rounded-2xl border-2 border-transparent bg-white px-5 py-3 text-[10px] font-black uppercase tracking-widest text-brand-olive-dark outline-none transition-all focus:border-brand-gold-bright/30 disabled:opacity-60"
+                                >
+                                    {ISSUE_STATUS_OPTIONS.map((option) => (
+                                        <option key={option.value} value={option.value}>
+                                            {option.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="grid gap-4 lg:grid-cols-[1fr_12rem]">
+                                <div>
+                                    <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-gray-400">
+                                        {ticket.issue_type.replace("_", " ")}
+                                    </p>
+                                    <p className="text-sm font-bold leading-6 text-brand-olive-dark">{ticket.description}</p>
+                                </div>
+                                <div className="rounded-2xl bg-white p-4">
+                                    <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Order Total</p>
+                                    <p className="text-lg font-black text-brand-gold-bright">
+                                        <RupeeAmount value={Number(ticket.total_price || 0).toFixed(2)} />
+                                    </p>
+                                </div>
+                            </div>
+
+                            {ticket.image_urls.length > 0 ? (
+                                <div className="mt-5 flex gap-3 overflow-x-auto pb-1">
+                                    {ticket.image_urls.map((image, index) => (
+                                        <a
+                                            key={`${ticket.id}-${image.key || image.url || index}`}
+                                            href={image.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="relative h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-brand-olive-dark/5"
+                                        >
+                                            <Image
+                                                src={image.url}
+                                                alt={image.originalName || `Issue image ${index + 1}`}
+                                                fill
+                                                sizes="96px"
+                                                className="object-cover"
+                                            />
+                                        </a>
+                                    ))}
+                                </div>
+                            ) : null}
+                        </div>
+                    ))}
+                    </div>
+
+                    {filteredTickets.length > FEEDBACK_TICKETS_PER_PAGE ? (
+                        <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
+                            {Array.from({ length: totalPages }, (_, index) => index + 1).map((page) => (
+                                <button
+                                    key={page}
+                                    onClick={() => setCurrentPage(page)}
+                                    className={cn(
+                                        "flex h-10 min-w-10 items-center justify-center rounded-xl px-3 text-xs font-black transition-all",
+                                        currentPage === page
+                                            ? "bg-brand-olive-dark text-white"
+                                            : "bg-brand-soft-gray text-brand-olive-dark hover:bg-brand-gold-bright hover:text-white"
+                                    )}
+                                >
+                                    {page}
+                                </button>
+                            ))}
+                        </div>
+                    ) : null}
+                </>
+            )}
+        </section>
     );
 }
 

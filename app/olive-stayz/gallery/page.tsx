@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import OliveStayzHeader from "@/components/olive-stayz/Header";
 import OliveStayzFooter from "@/components/olive-stayz/Footer";
 import Image from "next/image";

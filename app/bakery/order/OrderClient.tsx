@@ -104,7 +104,7 @@ export default function OrderClient({ initialProducts, initialCategories, user: 
     };
 
     return (
-        <div className="min-h-screen overflow-x-hidden bg-brand-soft-gray px-6 pb-20 pt-32">
+        <div className="min-h-screen overflow-x-hidden bg-brand-soft-gray px-4 sm:px-6 pb-16 md:pb-20 pt-28 md:pt-32">
             <div className="mx-auto max-w-7xl space-y-12">
                 <div className="flex flex-col items-start justify-between gap-8 md:flex-row md:items-end">
                     <div className="space-y-4">
@@ -115,17 +115,17 @@ export default function OrderClient({ initialProducts, initialCategories, user: 
                             <ArrowLeft size={16} />
                             Swiss Affaire
                         </Link>
-                        <h1 className="text-5xl font-black leading-none tracking-tighter text-brand-olive-dark md:text-7xl">
+                        <h1 className="text-3xl sm:text-5xl font-black leading-none tracking-tighter text-brand-olive-dark md:text-7xl">
                             Swiss Affaire <span className="font-serif italic text-brand-gold-bright">- The Bake Studio</span>
                         </h1>
-                        <p className="max-w-xl text-lg font-medium text-gray-500">
+                        <p className="max-w-xl text-base sm:text-lg font-medium text-gray-500">
                             Fresh artisanal supplies for <span className="font-black text-brand-olive-dark">{serverUser.name}</span>. Daily cloud-kitchen distribution active.
                         </p>
                     </div>
                 </div>
 
                 {isPostpaid && billingSummary && (
-                    <section className="rounded-[2.5rem] border border-white bg-white p-8 shadow-premium md:p-10">
+                    <section className="rounded-[1.5rem] sm:rounded-[2.5rem] border border-white bg-white p-5 sm:p-8 shadow-premium md:p-10">
                         <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                             <div>
                                 <div className="mb-3 flex items-center gap-3 text-xs font-black uppercase tracking-[0.2em] text-brand-gold-bright">
@@ -157,7 +157,7 @@ export default function OrderClient({ initialProducts, initialCategories, user: 
                             </div>
                         </div>
 
-                        <div className="mt-8 rounded-[2rem] border border-brand-olive-dark/10 bg-brand-soft-gray/40 p-6">
+                        <div className="mt-8 rounded-[1.5rem] sm:rounded-[2rem] border border-brand-olive-dark/10 bg-brand-soft-gray/40 p-4 sm:p-6">
                             <div className="mb-5 flex items-center gap-3 text-brand-olive-dark">
                                 <Receipt size={18} />
                                 <h3 className="text-lg font-black">Cycle Orders</h3>
@@ -247,11 +247,11 @@ export default function OrderClient({ initialProducts, initialCategories, user: 
                                     exit={{ opacity: 0, scale: 0.9 }}
                                     transition={{ delay: idx * 0.05 }}
                                     className={cn(
-                                        "flex h-full flex-col overflow-hidden rounded-[2.5rem] border border-white bg-white shadow-premium transition-all group hover:border-brand-gold-bright/20",
+                                        "flex h-full flex-col overflow-hidden rounded-[1.5rem] sm:rounded-[2.5rem] border border-white bg-white shadow-premium transition-all group hover:border-brand-gold-bright/20",
                                         !isAvailable && "grayscale opacity-75"
                                     )}
                                 >
-                                    <div className="relative h-64 overflow-hidden bg-brand-soft-gray">
+                                    <div className="relative h-48 sm:h-64 overflow-hidden bg-brand-soft-gray">
                                         <Image
                                             src={product.image || "https://images.unsplash.com/photo-1509440159596-0249088772ff?q=80&w=800&auto=format&fit=crop"}
                                             alt={product.name}
@@ -270,7 +270,7 @@ export default function OrderClient({ initialProducts, initialCategories, user: 
                                         </div>
                                     </div>
 
-                                    <div className="flex flex-1 flex-col gap-6 p-8">
+                                    <div className="flex flex-1 flex-col gap-4 sm:gap-6 p-5 sm:p-8">
                                         <div className="space-y-2">
                                             <h4 className="text-xl font-serif font-black leading-tight text-brand-olive-dark">{product.name}</h4>
                                             {product.description && (

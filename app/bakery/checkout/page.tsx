@@ -256,8 +256,8 @@ export default function CheckoutPage() {
     }
 
     return (
-        <main className="min-h-screen bg-brand-soft-gray/30 pb-20 pt-32">
-            <div className="mx-auto max-w-7xl px-6">
+        <main className="min-h-screen bg-brand-soft-gray/30 pb-16 pt-28 md:pt-32">
+            <div className="mx-auto max-w-7xl px-4 sm:px-6">
                 <button
                     onClick={() => router.back()}
                     className="group mb-8 flex items-center gap-2 text-brand-olive-dark/60 transition-colors hover:text-brand-olive-dark"
@@ -268,8 +268,8 @@ export default function CheckoutPage() {
 
                 <div className="grid grid-cols-1 gap-12 lg:grid-cols-12">
                     <div className="space-y-10 lg:col-span-8">
-                        <section className="rounded-[2.5rem] border border-brand-olive-dark/5 bg-white p-10 shadow-premium">
-                            <div className="mb-8 flex items-center justify-between">
+                        <section className="rounded-[1.5rem] sm:rounded-[2.5rem] border border-brand-olive-dark/5 bg-white p-5 sm:p-8 md:p-10 shadow-premium">
+                            <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                 <div className="flex items-center gap-4">
                                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-soft-gray text-brand-gold-bright">
                                         <MapPin size={24} />
@@ -278,7 +278,7 @@ export default function CheckoutPage() {
                                 </div>
                                 <button
                                     onClick={() => router.push("/bakery/settings?tab=addresses")}
-                                    className="flex items-center gap-2 rounded-xl bg-brand-soft-gray px-6 py-3 text-xs font-black uppercase tracking-widest transition-all hover:bg-brand-olive-dark hover:text-white"
+                                    className="flex items-center gap-2 justify-center rounded-xl bg-brand-soft-gray px-6 py-3 text-xs font-black uppercase tracking-widest transition-all hover:bg-brand-olive-dark hover:text-white"
                                 >
                                     <Plus size={16} />
                                     New Address
@@ -291,7 +291,7 @@ export default function CheckoutPage() {
                                         key={addr.id}
                                         onClick={() => setSelectedAddressId(addr.id)}
                                         className={cn(
-                                            "group relative rounded-3xl border-2 p-6 text-left transition-all",
+                                            "group relative rounded-3xl border-2 p-6 pr-12 text-left transition-all",
                                             selectedAddressId === addr.id
                                                 ? "border-brand-gold-bright bg-brand-gold-bright/5"
                                                 : "border-brand-olive-dark/10 bg-white hover:border-brand-olive-dark/30"
@@ -315,7 +315,7 @@ export default function CheckoutPage() {
                             </div>
                         </section>
 
-                        <section className="rounded-[2.5rem] border border-brand-olive-dark/5 bg-white p-10 shadow-premium">
+                        <section className="rounded-[1.5rem] sm:rounded-[2.5rem] border border-brand-olive-dark/5 bg-white p-5 sm:p-8 md:p-10 shadow-premium">
                             <div className="mb-8 flex items-center gap-4">
                                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-soft-gray text-brand-gold-bright">
                                     <CreditCard size={24} />
@@ -399,7 +399,7 @@ export default function CheckoutPage() {
                     </div>
 
                     <div className="space-y-6 lg:col-span-4">
-                        <section className="sticky top-32 rounded-[2.5rem] bg-brand-olive-dark p-10 text-white shadow-2xl">
+                        <section className="sticky top-32 rounded-[1.5rem] sm:rounded-[2.5rem] bg-brand-olive-dark p-6 sm:p-8 md:p-10 text-white shadow-2xl">
                             <h2 className="border-b border-white/10 pb-6 text-2xl font-serif font-black uppercase tracking-wider">Order Summary</h2>
 
                             <div className="custom-scrollbar mb-10 mt-8 max-h-60 space-y-6 overflow-y-auto pr-2">

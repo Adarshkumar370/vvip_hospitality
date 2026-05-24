@@ -47,10 +47,12 @@ import {
     getUsers,
     getUserPrices,
     setUserPrice,
-    updateUserBillingSettings
+    updateUserBillingSettings,
+    getOrderFeedbackTickets,
+    updateOrderFeedbackStatus
 } from "@/app/bakery/actions";
 
-type AdminSection = "dashboard" | "categories" | "products" | "staff" | "orders" | "users" | "pricing";
+type AdminSection = "dashboard" | "categories" | "products" | "staff" | "orders" | "users" | "pricing" | "issues";
 
 // ---------------------------------------------------------------------------
 // Shared types
@@ -100,6 +102,39 @@ interface Order {
     user_phone: string;
     items: OrderItem[];
 }
+
+type OrderFeedbackStatus = "open" | "in_review" | "resolved" | "closed";
+
+interface OrderFeedbackImage {
+    url: string;
+    key?: string;
+    name?: string;
+}
+
+interface OrderFeedbackTicket {
+    id: string;
+    order_id: string;
+    issue_type: string;
+    description: string;
+    image_urls: (OrderFeedbackImage | string)[];
+    status: OrderFeedbackStatus;
+    created_at: string;
+    updated_at: string;
+    order_number?: string;
+    order_status: string;
+    total_price: number;
+    user_name: string;
+    user_email?: string;
+    user_phone?: string;
+}
+
+const FEEDBACK_TICKETS_PER_PAGE = 20;
+const ISSUE_STATUS_OPTIONS: { value: OrderFeedbackStatus; label: string }[] = [
+    { value: "open", label: "Open" },
+    { value: "in_review", label: "In Review" },
+    { value: "resolved", label: "Resolved" },
+    { value: "closed", label: "Closed" },
+];
 
 type HealthData = {
     database?: {
@@ -181,6 +216,12 @@ export default function AdminPageClient() {
                             onClick={() => setActiveSection("orders")}
                         />
                         <SidebarLink
+                            icon={<AlertCircle />}
+                            label="User Issues"
+                            active={activeSection === "issues"}
+                            onClick={() => setActiveSection("issues")}
+                        />
+                        <SidebarLink
                             icon={<Settings />}
                             label="Categories"
                             active={activeSection === "categories"}
@@ -231,6 +272,7 @@ export default function AdminPageClient() {
                 <AnimatePresence mode="wait">
                     {activeSection === "dashboard" && <DashboardView key="dashboard" />}
                     {activeSection === "orders" && <OrdersView key="orders" />}
+                    {activeSection === "issues" && <AdminUserIssuesView key="issues" />}
                     {activeSection === "categories" && <CategoriesView key="categories" />}
                     {activeSection === "products" && <ProductsView key="products" />}
                     {activeSection === "staff" && <StaffView key="staff" />}
@@ -1275,6 +1317,232 @@ function StaffView() {
                 onConfirm={handleDelete}
                 onCancel={() => setDeletingId(null)}
             />
+        </motion.div>
+    );
+}
+
+function AdminUserIssuesView() {
+    const [tickets, setTickets] = useState<OrderFeedbackTicket[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [filterStatus, setFilterStatus] = useState<"active" | "closed">("active");
+    const [currentPage, setCurrentPage] = useState(1);
+    const [updatingTicketId, setUpdatingTicketId] = useState<string | null>(null);
+    const [message, setMessage] = useState("");
+
+    useEffect(() => {
+        loadTickets();
+    }, []);
+
+    const loadTickets = async () => {
+        setIsLoading(true);
+        const result = await getOrderFeedbackTickets();
+        if (result.success) {
+            setTickets((result.tickets || []) as OrderFeedbackTicket[]);
+            setMessage("");
+        } else {
+            setTickets([]);
+            setMessage(result.error || "Could not load user issues.");
+        }
+        setIsLoading(false);
+    };
+
+    const updateTicketStatus = async (ticketId: string, status: OrderFeedbackStatus) => {
+        setUpdatingTicketId(ticketId);
+        setMessage("");
+        const result = await updateOrderFeedbackStatus(ticketId, status);
+        if (result.success) {
+            await loadTickets();
+        } else {
+            setMessage(result.error || "Could not update issue status.");
+        }
+        setUpdatingTicketId(null);
+    };
+
+    const formatIssueType = (value: string) => value
+        .replace(/_/g, " ")
+        .replace(/\b\w/g, (char) => char.toUpperCase());
+
+    const activeTickets = tickets.filter((ticket) => ["open", "in_review"].includes(ticket.status));
+    const closedTickets = tickets.filter((ticket) => ["resolved", "closed"].includes(ticket.status));
+    const filteredTickets = filterStatus === "active" ? activeTickets : closedTickets;
+    const totalPages = Math.max(1, Math.ceil(filteredTickets.length / FEEDBACK_TICKETS_PER_PAGE));
+    const safeCurrentPage = Math.min(currentPage, totalPages);
+    const startIndex = (safeCurrentPage - 1) * FEEDBACK_TICKETS_PER_PAGE;
+    const paginatedTickets = filteredTickets.slice(startIndex, startIndex + FEEDBACK_TICKETS_PER_PAGE);
+
+    const imageUrlFor = (image: OrderFeedbackImage | string) => typeof image === "string" ? image : image.url;
+    const imageNameFor = (image: OrderFeedbackImage | string, index: number) => typeof image === "string" ? `Evidence ${index + 1}` : image.name || `Evidence ${index + 1}`;
+
+    return (
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8 pb-20">
+            <div className="flex flex-col gap-4 rounded-[2.5rem] bg-white p-6 shadow-premium md:p-8 xl:flex-row xl:items-center xl:justify-between">
+                <div>
+                    <p className="mb-1 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.3em] text-brand-gold-bright">
+                        <AlertCircle size={16} />
+                        Order feedback
+                    </p>
+                    <h2 className="text-4xl font-serif font-black text-brand-olive-dark">User Issues</h2>
+                </div>
+
+                <div className="flex w-full rounded-xl bg-brand-soft-gray p-1 xl:w-auto">
+                    {[
+                        { id: "active", label: `Active (${activeTickets.length})` },
+                        { id: "closed", label: `Closed (${closedTickets.length})` },
+                    ].map((tab) => (
+                        <button
+                            key={tab.id}
+                            type="button"
+                            onClick={() => {
+                                setFilterStatus(tab.id as "active" | "closed");
+                                setCurrentPage(1);
+                            }}
+                            className={cn(
+                                "flex-1 rounded-lg px-5 py-2 text-[10px] font-black uppercase tracking-widest transition-all xl:flex-none",
+                                filterStatus === tab.id ? "bg-white text-brand-olive-dark shadow-sm" : "text-gray-400 hover:text-brand-olive-dark"
+                            )}
+                        >
+                            {tab.label}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {message && (
+                <div className="rounded-2xl border border-red-100 bg-red-50 px-5 py-4 text-sm font-bold text-red-600">
+                    {message}
+                </div>
+            )}
+
+            <div className="space-y-6">
+                {isLoading ? (
+                    <div className="flex justify-center p-20">
+                        <Loader2 className="animate-spin text-brand-gold-bright" />
+                    </div>
+                ) : paginatedTickets.length === 0 ? (
+                    <div className="rounded-[2.5rem] bg-white p-20 text-center font-bold uppercase tracking-widest text-gray-400 shadow-premium">
+                        No {filterStatus} user issues found
+                    </div>
+                ) : (
+                    <>
+                        {paginatedTickets.map((ticket) => (
+                            <div key={ticket.id} className="overflow-hidden rounded-[2rem] border border-brand-olive-dark/5 bg-white shadow-premium">
+                                <div className="flex flex-col gap-4 border-b border-brand-olive-dark/5 bg-brand-soft-gray/50 px-8 py-5 xl:flex-row xl:items-center xl:justify-between">
+                                    <div>
+                                        <div className="flex flex-wrap items-center gap-3">
+                                            <span className="font-black text-brand-olive-dark">
+                                                {formatOrderDisplayLabel({ id: ticket.order_id, order_number: ticket.order_number })}
+                                            </span>
+                                            <span className="rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-widest text-brand-gold-bright">
+                                                {formatIssueType(ticket.issue_type)}
+                                            </span>
+                                        </div>
+                                        <p className="mt-1 text-xs font-bold text-gray-400">
+                                            {new Date(ticket.created_at).toLocaleString()} - {ticket.user_name} - {ticket.user_phone || ticket.user_email || "No contact"}
+                                        </p>
+                                    </div>
+
+                                    <div className="flex flex-wrap items-center gap-3">
+                                        <span className={cn(
+                                            "rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-widest",
+                                            ["open", "in_review"].includes(ticket.status) ? "bg-orange-50 text-orange-600" : "bg-emerald-50 text-emerald-600"
+                                        )}>
+                                            {formatIssueType(ticket.status)}
+                                        </span>
+                                        <select
+                                            value={ticket.status}
+                                            disabled={updatingTicketId === ticket.id}
+                                            onChange={(event) => updateTicketStatus(ticket.id, event.target.value as OrderFeedbackStatus)}
+                                            className="rounded-xl border border-brand-olive-dark/10 bg-white px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-brand-olive-dark outline-none transition-all hover:border-brand-gold-bright focus:border-brand-gold-bright disabled:opacity-50"
+                                        >
+                                            {ISSUE_STATUS_OPTIONS.map((option) => (
+                                                <option key={option.value} value={option.value}>{option.label}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 gap-8 p-8 xl:grid-cols-[1fr_260px]">
+                                    <div className="space-y-5">
+                                        <div>
+                                            <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-gray-400">Issue Details</p>
+                                            <p className="whitespace-pre-wrap text-sm font-semibold leading-7 text-brand-olive-dark">{ticket.description}</p>
+                                        </div>
+
+                                        {ticket.image_urls.length > 0 && (
+                                            <div>
+                                                <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Evidence Images</p>
+                                                <div className="flex flex-wrap gap-3">
+                                                    {ticket.image_urls.slice(0, 3).map((image, index) => {
+                                                        const imageUrl = imageUrlFor(image);
+                                                        return (
+                                                            <a
+                                                                key={imageUrl}
+                                                                href={imageUrl}
+                                                                target="_blank"
+                                                                rel="noreferrer"
+                                                                className="relative h-24 w-24 overflow-hidden rounded-2xl bg-brand-soft-gray shadow-sm ring-1 ring-brand-olive-dark/5 transition-transform hover:scale-105"
+                                                            >
+                                                                <Image
+                                                                    src={imageUrl}
+                                                                    alt={imageNameFor(image, index)}
+                                                                    fill
+                                                                    sizes="96px"
+                                                                    className="object-cover"
+                                                                />
+                                                            </a>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="rounded-2xl bg-brand-soft-gray p-6">
+                                        <div className="space-y-4">
+                                            <div>
+                                                <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Order Status</p>
+                                                <p className="font-black capitalize text-brand-olive-dark">{ticket.order_status}</p>
+                                            </div>
+                                            <div className="border-t border-brand-olive-dark/10 pt-4">
+                                                <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Order Total</p>
+                                                <p className="text-2xl font-black text-brand-gold-bright"><RupeeAmount value={ticket.total_price} /></p>
+                                            </div>
+                                            <div className="border-t border-brand-olive-dark/10 pt-4">
+                                                <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Last Updated</p>
+                                                <p className="text-xs font-bold text-brand-olive-dark">{new Date(ticket.updated_at).toLocaleString()}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+
+                        {totalPages > 1 && (
+                            <div className="flex items-center justify-center gap-4 pb-4 pt-8">
+                                <button
+                                    type="button"
+                                    onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                                    disabled={safeCurrentPage === 1}
+                                    className="rounded-xl border border-brand-olive-dark/10 bg-white px-6 py-2 text-sm font-bold text-brand-olive-dark transition-all hover:bg-brand-soft-gray disabled:opacity-50"
+                                >
+                                    Previous
+                                </button>
+                                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                                    Page {safeCurrentPage} of {totalPages}
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                                    disabled={safeCurrentPage === totalPages}
+                                    className="rounded-xl border border-brand-olive-dark/10 bg-white px-6 py-2 text-sm font-bold text-brand-olive-dark transition-all hover:bg-brand-soft-gray disabled:opacity-50"
+                                >
+                                    Next
+                                </button>
+                            </div>
+                        )}
+                    </>
+                )}
+            </div>
         </motion.div>
     );
 }
