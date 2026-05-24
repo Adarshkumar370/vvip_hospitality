@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Star, User, Hash, Calendar, Hotel, CheckCircle2 } from "lucide-react";
+import { Send, User, Hash, Calendar, Hotel, CheckCircle2 } from "lucide-react";
 
 type RatingOption = "Excellent" | "Good" | "Average" | "Poor";
 type YesNoOption = "Yes" | "Maybe" | "No";

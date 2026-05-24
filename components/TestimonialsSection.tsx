@@ -43,7 +43,7 @@ export function TestimonialsSection({ testimonials }: TestimonialsSectionProps) 
                                 ))}
                             </div>
                             <p className="text-gray-600 font-medium leading-relaxed mb-8 flex-1 italic">
-                                "{t.content}"
+                                &quot;{t.content}&quot;
                             </p>
                             <div>
                                 <h3 className="text-lg font-bold text-brand-olive-dark">{t.name}</h3>

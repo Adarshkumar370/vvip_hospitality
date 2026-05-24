@@ -36,7 +36,7 @@ export default function BakeryTestimonials() {
                             </div>
                             <Quote className="text-brand-gold-bright/20 mb-6 group-hover:text-brand-gold-bright/40 transition-colors" size={48} />
                             <p className="text-gray-500 text-xl font-serif italic mb-8 leading-relaxed">
-                                "{t.review}"
+                                &quot;{t.review}&quot;
                             </p>
                             <div className="mt-auto">
                                 <h4 className="text-brand-olive-dark font-black text-lg tracking-tight uppercase">{t.name}</h4>

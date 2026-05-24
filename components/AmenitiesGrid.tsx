@@ -11,8 +11,9 @@ import {
     Laptop,
     Refrigerator
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
-const iconMap: Record<string, any> = {
+const iconMap: Record<string, LucideIcon> = {
     wifi: Wifi,
     refrigerator: Refrigerator,
     wind: Wind,
@@ -40,7 +41,7 @@ export function AmenitiesGrid({ amenities }: AmenitiesGridProps) {
                     All-Inclusive Amenities
                 </h2>
                 <p className="text-gray-500 font-bold max-w-2xl mx-auto">
-                    We've thought of everything so you don't have to. Enjoy a range of premium facilities designed for your comfort.
+                    We&apos;ve thought of everything so you don&apos;t have to. Enjoy a range of premium facilities designed for your comfort.
                 </p>
             </div>
 

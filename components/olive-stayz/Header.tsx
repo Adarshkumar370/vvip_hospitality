@@ -6,7 +6,6 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import * as NavigationMenu from "@radix-ui/react-navigation-menu";
-import * as Dialog from "@radix-ui/react-dialog";
 import { FaWhatsapp, FaPhoneAlt, FaBars, FaTimes } from "react-icons/fa";
 import { cn } from "@/lib/utils";
 
@@ -19,7 +18,6 @@ export const NAV_LINKS = [
 ];
 
 export default function OliveStayzHeader() {
-    const [isScrolled, setIsScrolled] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [lastScrollY, setLastScrollY] = useState(0);
     const pathname = usePathname();
@@ -28,12 +26,6 @@ export default function OliveStayzHeader() {
         const handleScroll = () => {
             const currentScrollY = window.scrollY;
             
-            if (currentScrollY > 50) {
-                setIsScrolled(true);
-            } else {
-                setIsScrolled(false);
-            }
-
             // Auto-close mobile menu if user scrolls significantly from where they started
             if (isMobileMenuOpen) {
                 const scrollDelta = Math.abs(currentScrollY - lastScrollY);

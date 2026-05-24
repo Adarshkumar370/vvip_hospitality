@@ -4,16 +4,13 @@ import React from "react";
 import OliveStayzHeader from "@/components/olive-stayz/Header";
 import OliveStayzFooter from "@/components/olive-stayz/Footer";
 import Image from "next/image";
-import Link from "next/link";
 import { motion } from "framer-motion";
 import { RupeeAmount } from "@/components/ui/RupeeAmount";
 import { 
     FaWifi, FaBuilding, FaUtensils, FaCar, FaBolt, FaWheelchair, 
     FaUserTie, FaBroom, FaCamera, FaShieldAlt, FaFireExtinguisher, 
-    FaSuitcase, FaCoffee, FaCheckCircle, FaStar, FaConciergeBell
+    FaSuitcase, FaCheckCircle, FaStar, FaConciergeBell
 } from "react-icons/fa";
-import { GiCook, GiMeal, GiWashingMachine } from "react-icons/gi";
-import { MdOutlineFoodBank, MdOutlineRestaurantMenu } from "react-icons/md";
 
 export default function FacilitiesPage() {
     return (
@@ -64,7 +61,7 @@ export default function FacilitiesPage() {
                             Step into a thoughtfully curated studio designed for comfort and style. The space features a comfortable bed with fresh, clean linens, a modern bathroom, and a fully equipped kitchen for all your cooking needs. 
                         </p>
                         <p className="text-lg text-gray-500 leading-relaxed">
-                            Whether you're visiting for a short trip or an extended stay, this studio is designed to feel like home while offering the convenience and cleanliness of a hotel. Stay connected with high-speed free Wi-Fi and unwind with your favourite shows on the smart TV.
+                            Whether you&apos;re visiting for a short trip or an extended stay, this studio is designed to feel like home while offering the convenience and cleanliness of a hotel. Stay connected with high-speed free Wi-Fi and unwind with your favourite shows on the smart TV.
                         </p>
                     </motion.div>
 
@@ -84,7 +81,7 @@ export default function FacilitiesPage() {
                                     <div className="text-[#C5A04D] font-bold uppercase tracking-widest text-xs">Guest Rating</div>
                                 </div>
                             </div>
-                            <h3 className="text-2xl font-bold mb-6 italic text-[#C5A04D]">"Excellent amenities provided at the property."</h3>
+                            <h3 className="text-2xl font-bold mb-6 italic text-[#C5A04D]">&quot;Excellent amenities provided at the property.&quot;</h3>
                             <p className="text-gray-300 leading-relaxed mb-8">
                                 Guests praised the well-maintained rooms, modern furnishings, and fully equipped kitchens. The self-check-in system and responsive host ensure a pleasant, memorable stay.
                             </p>

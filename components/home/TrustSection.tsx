@@ -8,7 +8,7 @@ export function TrustSection() {
                     <span className="text-brand-gold-bright text-xs uppercase tracking-[0.4em] font-extrabold mb-6 block">The VVIP Promise</span>
                     <h2 className="text-4xl md:text-5xl font-serif font-extrabold mb-8 text-brand-olive-dark leading-tight">Built on Transparency <br /> & Trust</h2>
                     <p className="text-gray-600 text-lg leading-relaxed font-medium">
-                        Whether it's the "Pay-What-You-Spend" electricity model at Olive Stayz or the gourmet consistency of our Bakery, we operate with a commitment to integrity.
+                        Whether it&apos;s the &quot;Pay-What-You-Spend&quot; electricity model at Olive Stayz or the gourmet consistency of our Bakery, we operate with a commitment to integrity.
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-12 w-full md:w-auto justify-center md:justify-start">

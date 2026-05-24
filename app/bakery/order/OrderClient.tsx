@@ -17,6 +17,7 @@ import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { RupeeAmount } from "@/components/ui/RupeeAmount";
 import { useCart } from "@/context/CartContext";
+import { formatOrderDisplayLabel } from "@/lib/order-display";
 
 interface Product {
     id: string | number;
@@ -170,7 +171,7 @@ export default function OrderClient({ initialProducts, initialCategories, user: 
                                         <div key={order.id} className="rounded-[1.5rem] bg-white p-5 shadow-sm">
                                             <div className="mb-4 flex flex-col gap-2 border-b border-brand-olive-dark/10 pb-4 sm:flex-row sm:items-center sm:justify-between">
                                                 <div>
-                                                    <p className="font-black text-brand-olive-dark">{order.order_number || `Order ${order.id}`}</p>
+                                                    <p className="font-black text-brand-olive-dark">Order {formatOrderDisplayLabel(order)}</p>
                                                     <p className="text-xs font-bold text-gray-500">{new Date(order.created_at).toLocaleString()}</p>
                                                 </div>
                                                 <p className="text-lg font-black text-brand-gold-bright">{formatCurrency(order.total_price)}</p>

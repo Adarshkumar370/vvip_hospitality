@@ -2,10 +2,9 @@
 
 import { motion } from "framer-motion";
 import { VVIP_BAKERY } from "@/lib/constants/bakery";
-import { ArrowRight, ChefHat, Truck, Award, BadgeCheck, UtensilsCrossed, ExternalLink, Briefcase, Wheat, LogIn } from "lucide-react";
+import { ArrowRight, ChefHat, Truck, Award, BadgeCheck, UtensilsCrossed, ExternalLink, Briefcase, Wheat } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
-import { cn } from "@/lib/utils";
 import BakeryTestimonials from "@/components/bakery/BakeryTestimonials";
 import BakeryBackground from "@/components/bakery/BakeryBackground";
 

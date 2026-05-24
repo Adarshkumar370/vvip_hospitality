@@ -129,7 +129,7 @@ export default function RoomsPage() {
                             <span className="text-[#C5A04D] font-bold text-lg block mb-2">{room.size}</span>
                             <h2 className="text-4xl md:text-5xl font-black mb-6 tracking-tight">{room.name}</h2>
                             <p className="text-xl text-gray-600 mb-8 leading-relaxed italic">
-                                "{room.shortDesc}"
+                                &quot;{room.shortDesc}&quot;
                             </p>
                             <p className="text-gray-500 mb-10 leading-relaxed text-lg">
                                 {room.longDesc}

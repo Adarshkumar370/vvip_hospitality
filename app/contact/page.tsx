@@ -2,13 +2,9 @@
 
 import { motion } from "framer-motion";
 import { SITE_CONFIG } from "@/lib/constants/config";
-import { Mail, Phone, MapPin, Send, MessageCircle, Clock, FileCheck } from "lucide-react";
-import { useState } from "react";
-import { cn } from "@/lib/utils";
+import { Phone, MapPin, MessageCircle, Clock } from "lucide-react";
 
 export default function Contact() {
-    const [formState, setFormState] = useState({ name: "", email: "", type: "Stay", message: "" });
-
     const whatsappUrl = `https://wa.me/${SITE_CONFIG.whatsapp.replace(/\+/g, "").replace(/\s/g, "")}?text=${encodeURIComponent(SITE_CONFIG.whatsappMessage)}`;
 
     return (

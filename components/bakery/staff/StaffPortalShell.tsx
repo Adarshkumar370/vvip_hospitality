@@ -26,6 +26,7 @@ import {
 import { cn } from "@/lib/utils";
 import { RupeeAmount } from "@/components/ui/RupeeAmount";
 import { getAddresses, getOrders, getProducts, getProductsForUser, getStaffSession, getUserBillingSummary, getUsers, logoutStaff, retryStaffInvoiceGeneration, staffLogin, staffPlaceOrder, updateOrderStatus, updateProductDailyLimitForStaff } from "@/app/bakery/actions";
+import { formatOrderDisplayNumber } from "@/lib/order-display";
 
 type StaffRole = "baker" | "delivery" | "manager" | "accountant" | "admin";
 type PortalKey = "baker" | "delivery-agent" | "manager" | "accountant" | "owner";
@@ -53,7 +54,7 @@ type OrderItem = {
 };
 
 type OrderRecord = {
-    id: number;
+    id: string;
     order_number?: string;
     created_at: string;
     total_price?: number;
@@ -112,18 +113,6 @@ const ACCOUNTANT_FILTER_DAYS = [1, 7, 30] as const;
 
 function isOperationallyClearedPayment(status: string) {
     return status === "paid" || status === "postpaid-pending";
-}
-
-function getDisplayOrderNumber(order: OrderRecord) {
-    if (order.order_number) {
-        const match = order.order_number.match(/(\d+)$/);
-        if (match) {
-            return String(Number(match[1]));
-        }
-        return order.order_number;
-    }
-
-    return String(order.id);
 }
 
 function isWithinLastDays(dateValue: string | null | undefined, days: number) {
@@ -1227,7 +1216,7 @@ function StaffCreateOrderPanel({ onOrderPlaced }: { onOrderPlaced: () => Promise
                                             : "border-green-200 bg-green-50 text-green-700"
                                     )}
                                 >
-                                    Available budget INR {Number(billingSummary.availableCredit || 0).toFixed(2)}. This order will be marked postpaid pending and counted against the user's budget.
+                                    Available budget INR {Number(billingSummary.availableCredit || 0).toFixed(2)}. This order will be marked postpaid pending and counted against the user&apos;s budget.
                                 </div>
                             ) : null}
 
@@ -1328,7 +1317,7 @@ function OrderCard({
                 <div className="mb-8 flex items-start justify-between">
                     <div>
                         <div className="mb-2 flex items-center gap-3">
-                            <span className="text-xl font-black tracking-tighter text-brand-olive-dark">#ORD-{getDisplayOrderNumber(order)}</span>
+                            <span className="text-xl font-black tracking-tighter text-brand-olive-dark">#{formatOrderDisplayNumber(order)}</span>
                             <span className={cn("rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest", getStatusStyles(order.status))}>
                                 {order.status}
                             </span>

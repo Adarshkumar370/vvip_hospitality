@@ -18,7 +18,6 @@ import {
     Plus,
     Trash2,
     Camera,
-    Image as ImageIcon,
     ChevronRight,
     X,
     Pencil,
@@ -27,6 +26,7 @@ import {
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { RupeeAmount, RupeeIcon } from "@/components/ui/RupeeAmount";
+import { formatOrderDisplayLabel } from "@/lib/order-display";
 import {
     getHealthStatus,
     getProducts,
@@ -40,7 +40,6 @@ import {
     uploadImage,
     getStaffMembers,
     addStaff,
-    updateStaff,
     deleteStaff,
     getOrders,
     updateOrderStatus,
@@ -93,6 +92,7 @@ interface OrderItem {
 
 interface Order {
     id: string | number;
+    order_number?: string;
     status: string;
     total_price: number;
     created_at: string;
@@ -839,7 +839,8 @@ function ProductsView() {
 
     const handleLimitUpdate = async (product: Product, newLimit: number) => {
         setUpdatingLimitId(product.id);
-        const { id, created_at, ...updateData } = product;
+        const { id, ...updateData } = product;
+        delete updateData.created_at;
         const result = await updateProduct(id, { ...updateData, max_daily_limit: newLimit });
         if (result.success) {
             loadData();
@@ -1107,6 +1108,14 @@ function CategoriesView() {
                 onConfirm={handleDelete}
                 onCancel={() => setDeletingId(null)}
             />
+            {editingCategory && (
+                <EditCategoryModal
+                    category={editingCategory}
+                    onClose={() => setEditingCategory(null)}
+                    onSave={handleUpdate}
+                    isSubmitting={isSubmitting}
+                />
+            )}
         </motion.div>
     );
 }
@@ -1349,7 +1358,7 @@ function OrdersView() {
                                 <div key={order.id} className="bg-white rounded-[2rem] shadow-premium overflow-hidden border border-brand-olive-dark/5">
                                     <div className="bg-brand-soft-gray/50 px-8 py-4 border-b border-brand-olive-dark/5 flex justify-between items-center">
                                         <div className="flex items-center gap-6">
-                                            <span className="text-brand-olive-dark font-black">#ORD-{order.id}</span>
+                                            <span className="text-brand-olive-dark font-black">{formatOrderDisplayLabel(order)}</span>
                                             <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">{new Date(order.created_at).toLocaleString()}</span>
                                         </div>
                                         <div className="flex flex-wrap items-center gap-2 md:gap-4 mt-4 md:mt-0">

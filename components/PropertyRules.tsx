@@ -1,6 +1,6 @@
 "use client";
 
-import { ShieldAlert, Users, Clock, Ban } from "lucide-react";
+import { ShieldAlert, Users } from "lucide-react";
 
 interface PropertyRulesProps {
     rules: {

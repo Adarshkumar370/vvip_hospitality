@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     User,
@@ -20,9 +20,11 @@ import {
     Download
 } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { RupeeAmount } from "@/components/ui/RupeeAmount";
+import { formatOrderDisplayLabel } from "@/lib/order-display";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import {
@@ -123,6 +125,18 @@ export default function SettingsPage() {
         };
     }, []);
 
+    const loadInitialData = useCallback(async () => {
+        if (!user) return;
+        setIsLoadingData(true);
+        const [addrRes, orderRes] = await Promise.all([
+            getAddresses(user.id),
+            getUserOrders(user.id)
+        ]);
+        if (addrRes.success) setAddresses(addrRes.addresses || []);
+        if (orderRes.success) setOrders(orderRes.orders || []);
+        setIsLoadingData(false);
+    }, [user]);
+
     useEffect(() => {
         if (!isAuthLoading && !user) {
             const next = `${window.location.pathname}${window.location.search}`;
@@ -136,23 +150,11 @@ export default function SettingsPage() {
             // Handle Tab Redirect from URL
             const urlParams = new URLSearchParams(window.location.search);
             const tab = urlParams.get("tab") as Tab;
-            if (tab && tabs.some(t => t.id === tab)) {
+            if (tab && ["profile", "addresses", "orders"].includes(tab)) {
                 setActiveTab(tab);
             }
         }
-    }, [user, isAuthLoading, router]);
-
-    const loadInitialData = async () => {
-        if (!user) return;
-        setIsLoadingData(true);
-        const [addrRes, orderRes] = await Promise.all([
-            getAddresses(user.id),
-            getUserOrders(user.id)
-        ]);
-        if (addrRes.success) setAddresses(addrRes.addresses || []);
-        if (orderRes.success) setOrders(orderRes.orders || []);
-        setIsLoadingData(false);
-    };
+    }, [user, isAuthLoading, router, loadInitialData]);
 
     const handleGenerateInvoice = async (orderId: string) => {
         if (!user) return;
@@ -588,7 +590,7 @@ export default function SettingsPage() {
                                                     <div key={order.id} className="bg-white border border-brand-soft-gray rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-all">
                                                         <div className="bg-brand-soft-gray/50 px-6 py-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                                                             <div>
-                                                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Order ID: #{order.id}</p>
+                                                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Order No: {formatOrderDisplayLabel(order)}</p>
                                                                 <p className="text-xs font-bold text-brand-olive-dark">{new Date(order.created_at).toLocaleDateString()}</p>
                                                             </div>
                                                             <div className="flex gap-6 w-full md:w-auto justify-between md:justify-end">
@@ -654,8 +656,8 @@ export default function SettingsPage() {
                                                             {/* Items */}
                                                             <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
                                                                 {order.items.map((item: any) => (
-                                                                    <div key={item.id} className="shrink-0 w-12 h-12 bg-brand-soft-gray rounded-xl overflow-hidden border border-white" title={item.product_name}>
-                                                                        <img src={item.product_image} alt={item.product_name} className="w-full h-full object-cover" />
+                                                                    <div key={item.id} className="relative shrink-0 w-12 h-12 bg-brand-soft-gray rounded-xl overflow-hidden border border-white" title={item.product_name}>
+                                                                        <Image src={item.product_image} alt={item.product_name} fill sizes="48px" className="object-cover" />
                                                                     </div>
                                                                 ))}
                                                             </div>

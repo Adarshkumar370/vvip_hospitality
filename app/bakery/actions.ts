@@ -28,8 +28,7 @@ const productSchema = z.object({
     max_daily_limit: z.coerce.number().nonnegative().default(100),
 });
 
-const ORDER_STATUSES = ["payment_pending", "payment_failed", "placed", "confirmed", "preparing", "ready_for_pickup", "out_for_delivery", "completed", "cancelled"] as const;
-type OrderStatus = typeof ORDER_STATUSES[number];
+type OrderStatus = "payment_pending" | "payment_failed" | "placed" | "confirmed" | "preparing" | "ready_for_pickup" | "out_for_delivery" | "completed" | "cancelled";
 const ORDERING_TIME_ZONE = "Asia/Kolkata";
 const ORDERING_CLOSED_START_HOUR = 22;
 const ORDERING_OPEN_HOUR = 8;
@@ -75,7 +74,6 @@ const addressSchema = z.object({
     is_default: z.boolean().default(false),
 });
 
-const uuidOrNumericId = z.union([z.string().uuid(), z.number()]);
 const uuidId = z.string().uuid();
 
 function isUuid(value: unknown): value is string {
@@ -1454,7 +1452,8 @@ export async function staffLogin(email: string, pass: string) {
             return { success: false as const, error: "Invalid credentials" };
         }
 
-        const { password_hash, ...staffRecord } = staff[0] as any;
+        const staffRecord = { ...(staff[0] as any) };
+        delete staffRecord.password_hash;
         const staffWithoutHash = toStaffView(staffRecord);
 
         // If Admin/Owner, grant session access to the global Admin Panel
@@ -1812,7 +1811,7 @@ export async function createRazorpayOrder(amount: number, localOrderId?: string 
         let localOrder: any = null;
         if (localOrderId) {
             const orders = await sql`
-                SELECT id, user_id, total_amount
+                SELECT id, user_id, order_number, total_amount
                 FROM orders
                 WHERE id = ${localOrderId}
             `;
@@ -1830,7 +1829,9 @@ export async function createRazorpayOrder(amount: number, localOrderId?: string 
         const options = {
             amount: Math.round(amountToCharge * 100), // Razorpay expects paise
             currency: "INR",
-            receipt: localOrderId ? `ord_${String(localOrderId).slice(0, 24)}` : `rcpt_${Date.now()}`,
+            receipt: localOrder?.order_number
+                ? `ord_${String(localOrder.order_number).replace(/\D/g, "") || String(localOrder.order_number).slice(0, 24)}`
+                : `rcpt_${Date.now()}`,
         };
         const rzp = getRazorpay();
         if (!rzp) return { success: false, error: "Payment system is not configured." };
@@ -2158,7 +2159,7 @@ async function createOrderForUser(input: {
         }
 
         const [savedOrder] = await tx`
-            SELECT id, total_amount
+            SELECT id, order_number, total_amount
             FROM orders
             WHERE id = ${order.id}
         `;
@@ -2196,6 +2197,7 @@ async function createOrderForUser(input: {
         return {
             success: true,
             orderId: savedOrder.id,
+            orderNumber: savedOrder.order_number,
             total: Number(savedOrder.total_amount),
             paymentMode: isPostpaidUser ? "postpaid" : "prepaid",
         };

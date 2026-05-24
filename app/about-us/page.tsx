@@ -1,8 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { SITE_CONFIG } from "@/lib/constants/config";
-import { ShieldCheck, Heart, Users, Target, ArrowRight } from "lucide-react";
+import { ShieldCheck, Heart, Target, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -61,13 +60,13 @@ export default function AboutUs() {
                         <h2 className="text-4xl md:text-6xl font-serif font-black mb-10 text-brand-olive-dark tracking-tight">Our Story</h2>
                         <div className="space-y-6 text-lg text-gray-600 font-medium leading-relaxed">
                             <p>
-                                Founded with a singular vision, VVIP Hospitality group set out to bridge the gap between "standard services" and "genuine hospitality." The name "VVIP" reflects our core promise: to treat every visitor, guest, and partner as a Very Very Important Person.
+                                Founded with a singular vision, VVIP Hospitality group set out to bridge the gap between &quot;standard services&quot; and &quot;genuine hospitality.&quot; The name &quot;VVIP&quot; reflects our core promise: to treat every visitor, guest, and partner as a Very Very Important Person.
                             </p>
                             <p>
                                 What started as a boutique accommodation project in Kaushambi has now evolved into a multi-vertical hospitality group, spanning premium long-stays with <strong>Olive Stayz</strong> and professional B2B culinary solutions through <strong>Swiss Affaire - The Bake Studio</strong>.
                             </p>
                             <p>
-                                Our growth is powered by a commitment to data-driven transparency, whether it's our "Pay-What-You-Spend" electricity model or our strictly monitored gourmet quality protocols in our cloud kitchens.
+                                Our growth is powered by a commitment to data-driven transparency, whether it&apos;s our &quot;Pay-What-You-Spend&quot; electricity model or our strictly monitored gourmet quality protocols in our cloud kitchens.
                             </p>
                         </div>
                     </div>
@@ -136,7 +135,7 @@ export default function AboutUs() {
                         { label: "B2B Partners", value: "50+" },
                         { label: "Locations", value: "3+" },
                         { label: "Years of Excellence", value: "5+" }
-                    ].map((stat, idx) => (
+                        ].map((stat) => (
                         <div key={stat.label} className="text-center p-10 bg-brand-soft-gray rounded-[2.5rem] border border-gray-100">
                             <div className="text-4xl md:text-5xl font-serif font-black text-brand-olive-dark mb-3">{stat.value}</div>
                             <div className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-gold-bright">{stat.label}</div>

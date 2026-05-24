@@ -3,9 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Phone, Lock, ArrowRight, CheckCircle2, Loader2, Smartphone, User, Mail } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
-import { checkUser, registerUser, verifyFirebaseToken, loginUser } from "@/app/bakery/actions";
+import { registerUser, verifyFirebaseToken, loginUser } from "@/app/bakery/actions";
 import { useAuth } from "@/context/AuthContext";
 import { RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult } from "firebase/auth";
 import { auth } from "@/lib/firebase/client";

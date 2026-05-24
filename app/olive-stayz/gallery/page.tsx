@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import OliveStayzHeader from "@/components/olive-stayz/Header";
 import OliveStayzFooter from "@/components/olive-stayz/Footer";
 import Image from "next/image";
@@ -39,22 +39,11 @@ const CATEGORIES = ["All", "Property", "Rooms", "Interior", "Amenities"];
 export default function GalleryPage() {
   const [activeCategory, setActiveCategory] = useState("All");
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-  const [isLoaded, setIsLoaded] = useState(false);
-
-  useEffect(() => {
-    setIsLoaded(true);
-  }, []);
 
   const filteredImages =
     activeCategory === "All"
       ? GALLERY_IMAGES
       : GALLERY_IMAGES.filter((img) => img.category === activeCategory);
-
-  const openLightbox = (globalIndex: number) => {
-    // Find the index in filteredImages
-    const filteredIdx = filteredImages.findIndex((img) => img.src === GALLERY_IMAGES[globalIndex].src);
-    if (filteredIdx !== -1) setLightboxIndex(filteredIdx);
-  };
 
   const closeLightbox = () => setLightboxIndex(null);
 
