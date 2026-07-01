@@ -93,7 +93,6 @@ export default function FacilitiesPage() {
                         </div>
                         {/* Decorative background element */}
                         <div className="absolute -bottom-20 -right-20 w-64 h-64 bg-[#C5A04D]/10 rounded-full blur-3xl"></div>
-                        <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] pointer-events-none"></div>
                     </motion.div>
                 </div>
             </section>
@@ -171,7 +170,6 @@ export default function FacilitiesPage() {
                                 </div>
                             </div>
                             {/* Texture overlay */}
-                            <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] pointer-events-none"></div>
                         </motion.div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">

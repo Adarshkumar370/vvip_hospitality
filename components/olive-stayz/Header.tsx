@@ -97,14 +97,16 @@ export default function OliveStayzHeader() {
                             href="https://wa.me/919599519696"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="p-2 rounded-full transition-all hover:scale-110 text-[#25D366]"
+                            className="flex h-11 w-11 items-center justify-center rounded-full transition-all hover:scale-110 text-[#25D366]"
+                            aria-label="WhatsApp"
                             title="WhatsApp"
                         >
                             <FaWhatsapp size={24} />
                         </a>
                         <a
                             href="tel:+919599519696"
-                            className="p-2 rounded-full transition-all hover:scale-110 text-[#C5A04D]"
+                            className="flex h-11 w-11 items-center justify-center rounded-full transition-all hover:scale-110 text-[#C5A04D]"
+                            aria-label="Call Us"
                             title="Call Us"
                         >
                             <FaPhoneAlt size={20} />
@@ -125,8 +127,10 @@ export default function OliveStayzHeader() {
 
                     {/* Mobile Hamburger Menu Trigger */}
                     <button
-                        className="md:hidden p-2 transition-colors text-black"
+                        className="md:hidden flex h-11 w-11 items-center justify-center transition-colors text-black"
                         onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                        aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
+                        aria-expanded={isMobileMenuOpen}
                     >
                         {isMobileMenuOpen ? <FaTimes size={24} /> : <FaBars size={24} />}
                     </button>
@@ -140,14 +144,14 @@ export default function OliveStayzHeader() {
                         initial={{ opacity: 0, scale: 0.95, y: -10 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                        className="fixed top-[72px] left-6 right-6 bg-white z-[90] flex flex-col p-8 md:hidden shadow-2xl rounded-[2.5rem] border border-gray-100 items-center text-center overflow-hidden"
+                        className="fixed top-20 left-4 right-4 sm:left-6 sm:right-6 bg-white z-[90] flex max-h-[calc(100svh-6rem)] flex-col p-6 sm:p-8 md:hidden shadow-2xl rounded-[2rem] sm:rounded-[2.5rem] border border-gray-100 items-center text-center overflow-y-auto"
                     >
                         <nav className="flex flex-col gap-8 w-full">
                             {NAV_LINKS.map((link) => (
                                 <Link
                                     key={link.name}
                                     href={link.href || "#"}
-                                    className="flex justify-center flex-col items-center group"
+                                    className="flex min-h-11 justify-center flex-col items-center group"
                                     onClick={() => setIsMobileMenuOpen(false)}
                                 >
                                     <span className={cn(

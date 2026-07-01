@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { RupeeAmount } from "@/components/ui/RupeeAmount";
 import { useCart } from "@/context/CartContext";
 import { formatOrderDisplayLabel } from "@/lib/order-display";
+import { normalizeCartQuantity } from "@/lib/security-validation";
 
 interface Product {
     id: string | number;
@@ -85,22 +86,21 @@ export default function OrderClient({ initialProducts, initialCategories, user: 
         : null;
 
     const handleQuantityInput = (product: Product, rawValue: string) => {
-        const quantity = Number(rawValue);
+        const quantity = normalizeCartQuantity(rawValue);
 
-        if (!rawValue || Number.isNaN(quantity) || quantity <= 0) {
+        if (!quantity) {
             updateQuantity(product.id, 0);
             return;
         }
 
-        const normalizedQuantity = Math.max(0, Math.floor(quantity));
         const existingCartItem = cart.find((item) => item.id === product.id);
 
         if (existingCartItem) {
-            updateQuantity(product.id, normalizedQuantity);
+            updateQuantity(product.id, quantity);
             return;
         }
 
-        addToCart(product, normalizedQuantity);
+        addToCart(product, quantity);
     };
 
     return (
@@ -226,7 +226,7 @@ export default function OrderClient({ initialProducts, initialCategories, user: 
                             placeholder="Search products..."
                             aria-label="Search products"
                             value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
+                            onChange={(e) => setSearchQuery(e.target.value.slice(0, 80))}
                             className="w-full rounded-[2rem] border-2 border-transparent bg-white py-4 pl-14 pr-8 text-sm font-bold text-brand-olive-dark shadow-sm outline-none transition-all focus:border-brand-gold-bright/30"
                         />
                     </div>

@@ -18,6 +18,7 @@ import { getAddresses, createRazorpayOrder, verifyRazorpayPayment, placeOrder, v
 import { cn } from "@/lib/utils";
 import { RupeeAmount } from "@/components/ui/RupeeAmount";
 import Image from "next/image";
+import { normalizeCartQuantity } from "@/lib/security-validation";
 
 declare global {
     interface Window {
@@ -80,6 +81,7 @@ export default function CheckoutPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [isProcessing, setIsProcessing] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [checkoutIdempotencyKey] = useState(() => crypto.randomUUID());
 
     const isPostpaidUser = user?.payment_type === "postpaid_user";
     const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<"prepaid" | "postpaid">("prepaid");
@@ -138,8 +140,10 @@ export default function CheckoutPage() {
 
     const finalizeOrder = async () => {
         if (!user || !selectedAddressId || cart.length === 0) return;
-        const itemsPayload = cart.map((item) => ({ id: item.id, quantity: item.quantity }));
-        return placeOrder(user.id, itemsPayload, totalPrice, selectedAddressId, selectedPaymentMethod) as Promise<PlaceOrderResult>;
+        const itemsPayload = cart
+            .map((item) => ({ id: item.id, quantity: normalizeCartQuantity(item.quantity) }))
+            .filter((item): item is { id: string | number; quantity: number } => Boolean(item.quantity));
+        return placeOrder(user.id, itemsPayload, totalPrice, selectedAddressId, selectedPaymentMethod, checkoutIdempotencyKey) as Promise<PlaceOrderResult>;
     };
 
     const handleCheckout = async () => {
@@ -149,7 +153,12 @@ export default function CheckoutPage() {
         setError(null);
 
         try {
-            const itemsPayload = cart.map((item) => ({ id: item.id, quantity: item.quantity }));
+            const itemsPayload = cart
+                .map((item) => ({ id: item.id, quantity: normalizeCartQuantity(item.quantity) }))
+                .filter((item): item is { id: string | number; quantity: number } => Boolean(item.quantity));
+            if (itemsPayload.length !== cart.length) {
+                throw new Error("Cart contains an invalid quantity. Please review your basket.");
+            }
             const dailyLimitRes = await validateCartProductLimits(itemsPayload);
             if (!dailyLimitRes.success) {
                 const message = dailyLimitRes.error || "Could not verify daily product limits.";

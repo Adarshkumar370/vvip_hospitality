@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { normalizeCartQuantity } from "@/lib/security-validation";
 
 export interface CartItem {
     id: string | number;
@@ -44,12 +45,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }, [cart]);
 
     const addToCart = (item: Omit<CartItem, "quantity">, quantity = 1) => {
-        const normalizedQuantity = Math.max(1, Math.floor(quantity));
+        const normalizedQuantity = normalizeCartQuantity(quantity) ?? 1;
         setCart((prevCart) => {
             const existingItem = prevCart.find((i) => i.id === item.id);
             if (existingItem) {
+                const nextQuantity = normalizeCartQuantity(existingItem.quantity + normalizedQuantity) ?? existingItem.quantity;
                 return prevCart.map((i) =>
-                    i.id === item.id ? { ...i, quantity: i.quantity + normalizedQuantity } : i
+                    i.id === item.id ? { ...i, quantity: nextQuantity } : i
                 );
             }
             return [...prevCart, { ...item, quantity: normalizedQuantity }];
@@ -61,13 +63,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
     };
 
     const updateQuantity = (id: string | number, quantity: number) => {
-        if (quantity <= 0) {
+        const normalizedQuantity = normalizeCartQuantity(quantity);
+        if (!normalizedQuantity) {
             removeFromCart(id);
             return;
         }
         setCart((prevCart) =>
             prevCart.map((item) =>
-                item.id === id ? { ...item, quantity } : item
+                item.id === id ? { ...item, quantity: normalizedQuantity } : item
             )
         );
     };

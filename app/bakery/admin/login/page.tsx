@@ -54,8 +54,9 @@ export default function AdminLoginPage() {
                             <input
                                 type="email"
                                 placeholder="Admin Email"
+                                maxLength={254}
                                 value={email}
-                                onChange={(e) => setEmail(e.target.value)}
+                                onChange={(e) => setEmail(e.target.value.slice(0, 254))}
                                 autoComplete="email"
                                 required
                                 className="w-full bg-brand-soft-gray border-2 border-transparent focus:border-brand-gold-bright/30 focus:bg-white outline-none rounded-2xl py-5 pl-14 pr-6 text-lg font-bold text-brand-olive-dark transition-all"
@@ -68,8 +69,9 @@ export default function AdminLoginPage() {
                             <input
                                 type="password"
                                 placeholder="Password"
+                                maxLength={256}
                                 value={password}
-                                onChange={(e) => setPassword(e.target.value)}
+                                onChange={(e) => setPassword(e.target.value.slice(0, 256))}
                                 autoComplete="current-password"
                                 required
                                 className="w-full bg-brand-soft-gray border-2 border-transparent focus:border-brand-gold-bright/30 focus:bg-white outline-none rounded-2xl py-5 pl-14 pr-6 text-lg font-bold text-brand-olive-dark transition-all"

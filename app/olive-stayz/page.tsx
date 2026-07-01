@@ -28,7 +28,7 @@ export default function OliveStayz() {
             <OliveStayzHeader />
 
             {/* Hero Section with Responsive Slider Layout - Padded for Header */}
-            <section className="relative h-[calc(100vh-80px)] mt-20 w-full flex flex-col lg:grid lg:grid-cols-[45%_55%] overflow-hidden bg-white">
+            <section className="relative mt-20 w-full min-h-[calc(100svh-80px)] lg:h-[calc(100vh-80px)] flex flex-col lg:grid lg:grid-cols-[45%_55%] overflow-hidden bg-white">
 
                 {/* Left Side: Content (Desktop) / Overlay (Mobile) */}
                 <div className="relative z-20 flex flex-col justify-center px-6 md:px-12 lg:px-20 py-20 h-full bg-white order-2 lg:order-1 border-r border-gray-100">
@@ -92,10 +92,11 @@ export default function OliveStayz() {
                             transition={{ delay: 0.9, duration: 1 }}
                             className="hidden lg:block"
                         >
-                            <Link href="/olive-stayz/rooms">
-                                <button className="px-10 py-5 bg-black text-white font-black uppercase tracking-widest text-sm rounded-full shadow-2xl hover:bg-[#C5A04D] transition-all active:scale-95">
-                                    Explore Our Collection
-                                </button>
+                            <Link
+                                href="/olive-stayz/rooms"
+                                className="inline-flex items-center justify-center px-10 py-5 bg-black text-white font-black uppercase tracking-widest text-sm rounded-full shadow-2xl hover:bg-[#C5A04D] transition-all active:scale-95"
+                            >
+                                Explore Our Collection
                             </Link>
                         </motion.div>
                     </div>

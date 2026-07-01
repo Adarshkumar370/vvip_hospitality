@@ -21,7 +21,7 @@ export default function VVIPBakery() {
     return (
         <div className="flex flex-col bg-white">
             {/* Premium Bakery Hero - Redesigned */}
-            <section className="relative h-[90vh] min-h-[550px] lg:min-h-[700px] flex items-center justify-center overflow-hidden">
+            <section className="relative min-h-[100svh] h-auto flex items-center justify-center overflow-hidden py-28 sm:py-32 lg:min-h-[700px]">
                 <Image
                     src="/images/bakery_hero_new.png"
                     alt="Swiss Affaire - The Bake Studio Hero"
@@ -229,9 +229,9 @@ export default function VVIPBakery() {
                         
                         <div className="mt-10 sm:mt-16 md:mt-20 flex flex-col sm:flex-row items-center gap-6">
                             <div className="flex -space-x-4">
-                                {[1,2,3,4].map(i => (
-                                    <div key={i} className="w-12 h-12 rounded-full border-4 border-brand-olive-dark bg-brand-soft-gray overflow-hidden">
-                                        <Image src={`https://i.pravatar.cc/100?img=${i+10}`} alt="Partner" width={100} height={100} />
+                                {["SA", "OS", "VH", "BK"].map((label) => (
+                                    <div key={label} className="flex h-12 w-12 items-center justify-center rounded-full border-4 border-brand-olive-dark bg-brand-soft-gray text-[10px] font-black text-brand-olive-dark">
+                                        {label}
                                     </div>
                                 ))}
                             </div>

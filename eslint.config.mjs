@@ -20,10 +20,7 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
-    "eslint-report.json",
     "*.js",
-    "scripts/**",
-    "vvip_backend_details/**/*.js",
   ]),
 ]);
 

@@ -2,6 +2,8 @@
 
 import sql from "@/lib/db";
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
+import { sanitizeFeedbackPayload } from "@/lib/security-validation";
 
 export interface FeedbackData {
     hotelName: string;
@@ -32,12 +34,41 @@ export interface FeedbackData {
     additionalComments: string;
 }
 
+const FEEDBACK_RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
+const FEEDBACK_RATE_LIMIT_MAX = 5;
+const feedbackRateLimit = new Map<string, { count: number; resetAt: number }>();
+
+async function getFeedbackClientKey() {
+    const headerList = await headers();
+    const forwardedFor = headerList.get("x-forwarded-for")?.split(",")[0]?.trim();
+    const realIp = headerList.get("x-real-ip")?.trim();
+    return forwardedFor || realIp || "unknown";
+}
+
+function consumeFeedbackRateLimit(key: string) {
+    const now = Date.now();
+    const current = feedbackRateLimit.get(key);
+    if (!current || current.resetAt <= now) {
+        feedbackRateLimit.set(key, { count: 1, resetAt: now + FEEDBACK_RATE_LIMIT_WINDOW_MS });
+        return true;
+    }
+
+    if (current.count >= FEEDBACK_RATE_LIMIT_MAX) return false;
+    current.count += 1;
+    return true;
+}
+
 export async function submitGuestFeedback(data: FeedbackData) {
     try {
-        // Validate required basic fields
-        if (!data.hotelName || !data.roomNumber || !data.checkInDate || !data.checkOutDate) {
-            return { success: false, error: "Missing required fields." };
+        const clientKey = await getFeedbackClientKey();
+        if (!consumeFeedbackRateLimit(clientKey)) {
+            return { success: false, error: "Too many feedback submissions. Please try again later." };
         }
+
+        const parsed = sanitizeFeedbackPayload(data);
+        if (!parsed.success) return { success: false, error: parsed.error || "Invalid feedback." };
+
+        const safe = parsed.data as FeedbackData;
 
         await sql`
             INSERT INTO guest_feedback (
@@ -47,15 +78,15 @@ export async function submitGuestFeedback(data: FeedbackData) {
                 wifi, noise_levels, safety, staff_behavior, check_in_speed, maintenance, value_for_money,
                 stay_again, recommend, like_most, improve, additional_comments
             ) VALUES (
-                ${data.hotelName}, ${data.roomNumber}, ${data.guestName}, ${data.checkInDate}, ${data.checkOutDate},
-                ${data.bookingMethod}, ${data.bookingMethodOther}, ${data.purposeOfVisit}, ${data.purposeOfVisitOther},
-                ${data.cleanlinessRoom}, ${data.cleanlinessBathroom}, ${data.comfortBed}, ${data.roomFacilities}, ${data.bathroomFacilities},
-                ${data.wifi}, ${data.noiseLevels}, ${data.safety}, ${data.staffBehavior}, ${data.checkInSpeed}, ${data.maintenance}, ${data.valueForMoney},
-                ${data.stayAgain}, ${data.recommend}, ${data.likeMost}, ${data.improve}, ${data.additionalComments}
+                ${safe.hotelName}, ${safe.roomNumber}, ${safe.guestName}, ${safe.checkInDate}, ${safe.checkOutDate},
+                ${safe.bookingMethod}, ${safe.bookingMethodOther}, ${safe.purposeOfVisit}, ${safe.purposeOfVisitOther},
+                ${safe.cleanlinessRoom}, ${safe.cleanlinessBathroom}, ${safe.comfortBed}, ${safe.roomFacilities}, ${safe.bathroomFacilities},
+                ${safe.wifi}, ${safe.noiseLevels}, ${safe.safety}, ${safe.staffBehavior}, ${safe.checkInSpeed}, ${safe.maintenance}, ${safe.valueForMoney},
+                ${safe.stayAgain}, ${safe.recommend}, ${safe.likeMost}, ${safe.improve}, ${safe.additionalComments}
             )
         `;
 
-        revalidatePath("/reception"); // Not strictly necessary since it's a client form, but good practice
+        revalidatePath("/receptionolivestayzk");
         
         return { success: true };
     } catch (error) {

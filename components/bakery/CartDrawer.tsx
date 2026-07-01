@@ -104,6 +104,7 @@ export default function CartDrawer({ isOpen, onClose, onRequireAuth }: CartDrawe
                             <button
                                 onClick={onClose}
                                 className="p-3 text-gray-400 hover:text-brand-olive-dark transition-colors"
+                                aria-label="Close basket"
                             >
                                 <X size={24} />
                             </button>
@@ -122,7 +123,7 @@ export default function CartDrawer({ isOpen, onClose, onRequireAuth }: CartDrawe
                                     </div>
                                     <button
                                         onClick={onClose}
-                                        className="text-brand-gold-bright text-sm font-black uppercase tracking-widest hover:underline"
+                                        className="min-h-11 px-4 text-brand-gold-bright text-sm font-black uppercase tracking-widest hover:underline"
                                     >
                                         Browse Catalog
                                     </button>
@@ -152,10 +153,11 @@ export default function CartDrawer({ isOpen, onClose, onRequireAuth }: CartDrawe
                                             <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">{item.category}</p>
 
                                             <div className="flex items-center justify-between pt-1">
-                                                <div className="flex items-center bg-brand-soft-gray rounded-lg p-1">
+                                                <div className="flex items-center bg-brand-soft-gray rounded-xl p-1">
                                                     <button
                                                         onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                                                        className="p-1 text-brand-olive-dark/60 hover:text-brand-olive-dark transition-colors"
+                                                        className="flex h-9 w-9 items-center justify-center text-brand-olive-dark/60 hover:text-brand-olive-dark transition-colors"
+                                                        aria-label={`Decrease quantity for ${item.name}`}
                                                     >
                                                         <Minus size={14} />
                                                     </button>
@@ -165,19 +167,21 @@ export default function CartDrawer({ isOpen, onClose, onRequireAuth }: CartDrawe
                                                         pattern="[0-9]*"
                                                         value={String(item.quantity)}
                                                         onChange={(e) => handleQuantityInput(item.id, e.target.value)}
-                                                        className="w-10 bg-transparent text-center text-sm font-black text-brand-olive-dark outline-none"
+                                                        className="h-9 w-10 bg-transparent text-center text-sm font-black text-brand-olive-dark outline-none"
                                                         aria-label={`Enter quantity for ${item.name}`}
                                                     />
                                                     <button
                                                         onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                                                        className="p-1 text-brand-olive-dark/60 hover:text-brand-olive-dark transition-colors"
+                                                        className="flex h-9 w-9 items-center justify-center text-brand-olive-dark/60 hover:text-brand-olive-dark transition-colors"
+                                                        aria-label={`Increase quantity for ${item.name}`}
                                                     >
                                                         <Plus size={14} />
                                                     </button>
                                                 </div>
                                                 <button
                                                     onClick={() => removeFromCart(item.id)}
-                                                    className="text-gray-300 hover:text-red-500 transition-colors"
+                                                    className="flex h-10 w-10 items-center justify-center text-gray-300 hover:text-red-500 transition-colors"
+                                                    aria-label={`Remove ${item.name} from basket`}
                                                 >
                                                     <Trash2 size={16} />
                                                 </button>
@@ -195,6 +199,8 @@ export default function CartDrawer({ isOpen, onClose, onRequireAuth }: CartDrawe
                                     <div className="flex justify-between text-sm">
                                         <span className="text-gray-500 font-medium">Subtotal</span>
                                         <RupeeAmount className="font-black text-brand-olive-dark" value={totalPrice} />
+                                    </div>
+                                    <div className="flex items-baseline justify-between gap-4">
                                         <span className="text-brand-olive-dark font-black">Total Price</span>
                                         <RupeeAmount className="font-serif font-black text-2xl text-brand-olive-dark" value={totalPrice} />
                                     </div>

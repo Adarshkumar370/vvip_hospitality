@@ -6,13 +6,20 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { getIronSession } from "iron-session";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { unstable_cache, revalidatePath } from "next/cache";
 import { adminSessionOptions, type AdminSessionData, staffSessionOptions, type StaffSessionData, userSessionOptions, type UserSessionData } from "@/lib/session";
 import { EXTERNAL_API_TIMEOUT_MS, INVOICE_API_TIMEOUT_MS, getSafeErrorMessage, isTimeoutError, withTimeout } from "@/lib/timeout";
 import Razorpay from "razorpay";
 import * as crypto from "crypto";
+import { canRoleUpdateOrderStatus, requireSameUserId } from "@/lib/bakery-security";
+import {
+    MAX_CART_ITEM_QUANTITY,
+    hasAllowedImageSignature,
+    sanitizeLoginEmail,
+    validateCheckoutIdempotencyKey,
+} from "@/lib/security-validation";
 
 // ---------------------------------------------------------------------------
 // Shared Zod Schemas
@@ -34,7 +41,11 @@ const ORDERING_TIME_ZONE = "Asia/Kolkata";
 const ORDERING_CLOSED_START_HOUR = 22;
 const ORDERING_OPEN_HOUR = 8;
 const ORDERING_CLOSED_ERROR = "Online ordering is available from 8:00 AM to 10:00 PM IST. Please place your order during business hours.";
+const VERIFIED_PHONE_TTL_MS = 10 * 60 * 1000;
 type OrderPaymentMode = "prepaid" | "postpaid";
+const AUTH_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const AUTH_RATE_LIMIT_MAX = 8;
+const authRateLimit = new Map<string, { count: number; resetAt: number }>();
 
 const LEGACY_TO_DB_ORDER_STATUS: Record<string, OrderStatus> = {
     pending: "placed",
@@ -412,6 +423,10 @@ function toOrderView(order: any) {
     };
 }
 
+function isOperationallyClearedPayment(status: string) {
+    return status === "paid" || status === "postpaid-pending";
+}
+
 function toAddressView(address: any) {
     return {
         ...address,
@@ -553,6 +568,107 @@ async function getAdminSessionInternal() {
     return getIronSession<AdminSessionData>(await cookies(), adminSessionOptions);
 }
 
+async function getRequestClientIp() {
+    const headerList = await headers();
+    return headerList.get("x-forwarded-for")?.split(",")[0]?.trim() || headerList.get("x-real-ip")?.trim() || "unknown";
+}
+
+async function consumeAuthRateLimit(scope: string, identifier: string) {
+    const now = Date.now();
+    const ip = await getRequestClientIp();
+    const key = `${scope}:${identifier}:${ip}`;
+    const current = authRateLimit.get(key);
+
+    if (!current || current.resetAt <= now) {
+        authRateLimit.set(key, { count: 1, resetAt: now + AUTH_RATE_LIMIT_WINDOW_MS });
+        return { allowed: true, key };
+    }
+
+    if (current.count >= AUTH_RATE_LIMIT_MAX) {
+        return { allowed: false, key };
+    }
+
+    current.count += 1;
+    return { allowed: true, key };
+}
+
+function clearAuthRateLimit(key: string) {
+    authRateLimit.delete(key);
+}
+
+async function requireAdminAction() {
+    const session = await getAdminSessionInternal();
+    if (!session.isAdmin) {
+        return { success: false as const, error: "Unauthorized admin action." };
+    }
+    return { success: true as const };
+}
+
+async function getActiveStaffFromSession() {
+    const session = await getIronSession<StaffSessionData>(await cookies(), staffSessionOptions);
+    const sessionStaff = session.staff;
+
+    if (!sessionStaff?.id || !isUuid(sessionStaff.id)) return null;
+
+    const [staff] = await sql`
+        SELECT id, staff_name, email, mobile_no, designation, status
+        FROM staff_members
+        WHERE id = ${sessionStaff.id}
+          AND status = 'active'
+    `;
+
+    return staff ? toStaffView(staff) : null;
+}
+
+async function requireAdminOrStaffRoles(allowedRoles: StaffRole[]) {
+    const adminSession = await getAdminSessionInternal();
+    if (adminSession.isAdmin) {
+        return { success: true as const, actor: "admin" as const };
+    }
+
+    const staff = await getActiveStaffFromSession();
+    if (!staff || !allowedRoles.includes(staff.role)) {
+        return { success: false as const, error: "Unauthorized staff action." };
+    }
+
+    return { success: true as const, actor: "staff" as const, staff };
+}
+
+async function requireUserDataAccess(userId: string | number, staffRoles: StaffRole[] = []) {
+    if (!isUuid(userId)) {
+        return { success: false as const, error: "Invalid user ID." };
+    }
+
+    const user = await getUserSession();
+    if (user?.id && String(user.id) === String(userId)) {
+        return { success: true as const, actor: "user" as const, userId: String(user.id) };
+    }
+
+    if (staffRoles.length > 0) {
+        const privileged = await requireAdminOrStaffRoles(staffRoles);
+        if (privileged.success) return privileged;
+    }
+
+    return { success: false as const, error: "Unauthorized user data access." };
+}
+
+async function requireRecentlyVerifiedPhone(phone: string) {
+    const parsed = phoneSchema.safeParse(phone);
+    if (!parsed.success) return { success: false as const, error: "Invalid phone number" };
+
+    const normalizedPhone = normalizeMobileNo(parsed.data);
+    const session = await getIronSession<UserSessionData>(await cookies(), userSessionOptions);
+    if (
+        session.verifiedPhone !== normalizedPhone ||
+        !session.verifiedPhoneExpiresAt ||
+        session.verifiedPhoneExpiresAt < Date.now()
+    ) {
+        return { success: false as const, error: "Phone verification expired. Please request a new OTP." };
+    }
+
+    return { success: true as const, normalizedPhone, session };
+}
+
 export async function getUserSession() {
     const session = await getIronSession<UserSessionData>(await cookies(), userSessionOptions);
     if (!session.user) return undefined;
@@ -610,6 +726,11 @@ export async function verifyFirebaseToken(idToken: string, phone: string) {
             return { success: false as const, error: "Phone number mismatch. Please try again." };
         }
 
+        const session = await getIronSession<UserSessionData>(await cookies(), userSessionOptions);
+        session.verifiedPhone = expectedPhone;
+        session.verifiedPhoneExpiresAt = Date.now() + VERIFIED_PHONE_TTL_MS;
+        await session.save();
+
         return { success: true as const };
     } catch (err: any) {
         console.error("Firebase token verification failed:", err?.code, err?.message, err);
@@ -641,6 +762,9 @@ export async function checkUser(phone: string) {
 }
 
 export async function registerUser(phone: string, name: string, email: string) {
+    const verified = await requireRecentlyVerifiedPhone(phone);
+    if (!verified.success) return verified;
+
     const schema = z.object({
         phone: phoneSchema,
         name: z.string().min(1).max(100).trim(),
@@ -678,6 +802,8 @@ export async function registerUser(phone: string, name: string, email: string) {
         
         const session = await getIronSession<UserSessionData>(await cookies(), userSessionOptions);
         session.user = user as any;
+        session.verifiedPhone = undefined;
+        session.verifiedPhoneExpiresAt = undefined;
         await session.save();
 
         return { success: true as const, user };
@@ -688,38 +814,44 @@ export async function registerUser(phone: string, name: string, email: string) {
 }
 
 export async function loginUser(phone: string) {
+    const verified = await requireRecentlyVerifiedPhone(phone);
+    if (!verified.success) return verified;
+
     const result = await checkUser(phone);
     if (result.exists && result.user) {
         const session = await getIronSession<UserSessionData>(await cookies(), userSessionOptions);
         session.user = result.user as any;
+        session.verifiedPhone = undefined;
+        session.verifiedPhoneExpiresAt = undefined;
         await session.save();
         return { success: true, user: result.user };
     }
     return { success: false, error: "User not found" };
 }
 
-export async function syncUserSession(user: { id: string | number, name: string, email: string, phone: string }) {
+export async function syncUserSession(_user: { id: string | number, name: string, email: string, phone: string }) {
+    void _user;
     const session = await getIronSession<UserSessionData>(await cookies(), userSessionOptions);
     if (!session.user) {
         return { success: false as const, error: "Session expired. Please log in again." };
     }
 
-    const hydratedUser = await findUserFromSessionIdentity(user);
+    const hydratedUser = await findUserFromSessionIdentity(session.user);
     if (hydratedUser) {
         session.user = hydratedUser as any;
         await session.save();
         return { success: true, user: hydratedUser };
     }
 
-    if (!isUuid(user.id)) {
+    if (!isUuid(session.user.id)) {
         session.destroy();
         return { success: false, error: "Session user is no longer valid. Please sign in again." };
     }
 
     if (!session.user) {
-        session.user = user as any;
+        session.user = session.user as any;
         await session.save();
-        return { success: true, user };
+        return { success: true, user: session.user };
     }
     return { success: false, alreadySynced: true, user: session.user };
 }
@@ -732,11 +864,17 @@ export async function logoutUser() {
 // Admin Auth
 // ---------------------------------------------------------------------------
 export async function verifyAdmin(email: string, pass: string) {
+    const safeEmail = sanitizeLoginEmail(email);
+    const rateLimit = await consumeAuthRateLimit("admin", safeEmail || "blank");
+    if (!rateLimit.allowed) {
+        return { success: false as const, error: "Too many login attempts. Please try again later." };
+    }
+
     try {
         const staff = await sql`
             SELECT designation, password_hash
             FROM staff_members
-            WHERE email = ${email} AND status = 'active'
+            WHERE email = ${safeEmail} AND status = 'active'
         `;
 
         if (staff.length > 0 && (staff[0] as any).designation === 'admin' && (staff[0] as any).password_hash) {
@@ -745,6 +883,7 @@ export async function verifyAdmin(email: string, pass: string) {
                 const session = await getAdminSessionInternal();
                 session.isAdmin = true;
                 await session.save();
+                clearAuthRateLimit(rateLimit.key);
                 return { success: true as const };
             }
             return { success: false as const, error: "Invalid credentials" };
@@ -764,6 +903,17 @@ export async function logoutAdmin() {
 }
 
 export async function getHealthStatus() {
+    const auth = await requireAdminAction();
+    if (!auth.success) {
+        return {
+            status: "unauthorized",
+            database: {
+                connected: false,
+                error: "Unauthorized",
+            },
+            timestamp: new Date().toISOString(),
+        };
+    }
 
     try {
         const start = Date.now();
@@ -886,6 +1036,11 @@ export async function getProductsForUser(userId: string | number) {
         return getProducts();
     }
 
+    const auth = await requireUserDataAccess(userId, ["admin", "manager", "accountant"]);
+    if (!auth.success) {
+        return { success: false as const, error: auth.error };
+    }
+
     const fetcher = unstable_cache(
         async (uId: string) => {
             const products = await sql`
@@ -926,6 +1081,9 @@ export async function getProductsForUser(userId: string | number) {
 }
 
 export async function addProduct(product: { name: string, category: string, price: number, image: string, description: string, unit: string, max_daily_limit: number }) {
+    const auth = await requireAdminAction();
+    if (!auth.success) return auth;
+
     const parsed = productSchema.safeParse(product);
     if (!parsed.success) {
         return { success: false as const, error: parsed.error.issues[0].message };
@@ -963,6 +1121,9 @@ export async function addProduct(product: { name: string, category: string, pric
 }
 
 export async function deleteProduct(id: string | number) {
+    const auth = await requireAdminAction();
+    if (!auth.success) return auth;
+
     try {
         await sql`
       UPDATE products SET status = 'hidden' WHERE id = ${id}
@@ -999,6 +1160,9 @@ export async function getCategories() {
 }
 
 export async function addCategory(name: string) {
+    const auth = await requireAdminAction();
+    if (!auth.success) return auth;
+
     try {
         const newCategory = await sql`
       INSERT INTO product_categories (name, slug, status)
@@ -1015,6 +1179,9 @@ export async function addCategory(name: string) {
 }
 
 export async function deleteCategory(id: string | number) {
+    const auth = await requireAdminAction();
+    if (!auth.success) return auth;
+
     try {
         await sql`
       UPDATE product_categories SET status = 'hidden' WHERE id = ${id}
@@ -1028,6 +1195,9 @@ export async function deleteCategory(id: string | number) {
 }
 
 export async function updateCategory(id: string | number, name: string) {
+    const auth = await requireAdminAction();
+    if (!auth.success) return auth;
+
     try {
         const updated = await sql`
       UPDATE product_categories 
@@ -1044,6 +1214,9 @@ export async function updateCategory(id: string | number, name: string) {
 }
 
 export async function updateProduct(id: string | number, product: { name: string, category: string, price: number, image: string, description: string, unit: string, max_daily_limit: number }) {
+    const auth = await requireAdminAction();
+    if (!auth.success) return auth;
+
     const parsed = productSchema.safeParse(product);
     if (!parsed.success) {
         console.error("Product validation failed:", parsed.error.format());
@@ -1083,6 +1256,9 @@ export async function updateProduct(id: string | number, product: { name: string
 }
 
 export async function uploadImage(formData: FormData) {
+    const auth = await requireAdminAction();
+    if (!auth.success) return auth;
+
     try {
         const file = formData.get("file") as File;
         if (!file) {
@@ -1105,6 +1281,9 @@ export async function uploadImage(formData: FormData) {
         const filePath = `products/${fileName}`;
 
         const buffer = Buffer.from(await file.arrayBuffer());
+        if (!hasAllowedImageSignature(buffer, file.type)) {
+            return { success: false, error: "Invalid image content. The file does not match its declared type." };
+        }
         const bucket = process.env.SUPABASE_STORAGE_BUCKET || "products";
 
         const command = new PutObjectCommand({
@@ -1131,6 +1310,9 @@ export async function uploadImage(formData: FormData) {
 // --- STAFF MANAGEMENT ---
 
 export async function getStaffMembers() {
+    const auth = await requireAdminAction();
+    if (!auth.success) return { ...auth, staff: [] };
+
     try {
         const staff = await sql`
             SELECT id, staff_name, email, mobile_no, designation, status, created_at
@@ -1146,6 +1328,9 @@ export async function getStaffMembers() {
 }
 
 export async function addStaff(staffMember: { name: string, email: string, phone: string, role: string, password: string }) {
+    const auth = await requireAdminAction();
+    if (!auth.success) return auth;
+
     const parsed = staffSchema.safeParse(staffMember);
     if (!parsed.success) {
         return { success: false as const, error: parsed.error.issues[0].message };
@@ -1176,51 +1361,10 @@ export async function addStaff(staffMember: { name: string, email: string, phone
     }
 }
 
-export async function updateStaff(id: string | number, staffMember: { name: string, email: string, phone: string, role: string }) {
-    try {
-        // Find current role
-        const currentStaff = await sql`SELECT designation FROM staff_members WHERE id = ${id} AND status = 'active'`;
-        if (currentStaff.length === 0) return { success: false, error: "Staff member not found" };
-
-        const oldRole = toStaffRole((currentStaff[0] as any).designation);
-        const newRole = staffMember.role as StaffRole;
-        const newDesignation = toStaffDesignation(newRole);
-
-        // If we are changing an admin to a non-admin role, check if they are the last admin
-        if (oldRole === 'admin' && newRole !== 'admin') {
-            const adminCount = await sql`SELECT count(*) FROM staff_members WHERE designation = 'admin' AND status = 'active'`;
-            const currentCount = parseInt((adminCount[0] as any).count);
-
-            if (currentCount <= 1) {
-                return {
-                    success: false,
-                    error: "Security Lock: Cannot downgrade the last administrator. Please appoint another admin first."
-                };
-            }
-        }
-
-        const updatedStaff = await sql.begin(async (tx: any) => {
-            const [updated] = await tx`
-                UPDATE staff_members
-                SET staff_name = ${staffMember.name},
-                    email = ${staffMember.email},
-                    mobile_no = ${normalizeMobileNo(staffMember.phone)},
-                    designation = ${newDesignation}
-                WHERE id = ${id}
-                RETURNING id, staff_name, email, mobile_no, designation, status, created_at
-            `;
-            if (updated) await grantDefaultStaffPermissions(tx, updated.id, newRole);
-            return updated ? toStaffView(updated) : null;
-        });
-        if (!updatedStaff) return { success: false, error: "Staff member not found" };
-        return { success: true, staff: updatedStaff };
-    } catch (err) {
-        console.error("Failed to update staff:", err);
-        return { success: false, error: getStaffMutationErrorMessage(err, "Failed to update staff") };
-    }
-}
-
 export async function deleteStaff(id: string | number) {
+    const auth = await requireAdminAction();
+    if (!auth.success) return auth;
+
     try {
         // Find current role
         const currentStaff = await sql`SELECT designation FROM staff_members WHERE id = ${id} AND status = 'active'`;
@@ -1254,6 +1398,9 @@ export async function deleteStaff(id: string | number) {
 // (Redundant placeOrder removed, using consolidated version below)
 
 export async function getOrders() {
+    const auth = await requireAdminOrStaffRoles(["admin", "manager", "accountant", "baker", "delivery"]);
+    if (!auth.success) return { ...auth, orders: [] };
+
     try {
         const orders = await sql`
             SELECT
@@ -1332,11 +1479,50 @@ export async function getOrders() {
             GROUP BY o.id, inv.invoice_number, inv.invoice_pdf_url, pay.payment_received_at
             ORDER BY o.created_at DESC
         `;
-        return { success: true as const, orders: orders.map(toOrderView) };
+        const actorRole = auth.actor === "staff" ? auth.staff.role : "admin";
+        return { success: true as const, orders: orders.map(toOrderView).filter((order: any) => isOrderVisibleToRole(order, actorRole)).map((order: any) => redactOrderForRole(order, actorRole)) };
     } catch (err) {
         console.error("Failed to fetch orders:", err);
         return { success: false as const, error: "Database error" };
     }
+}
+
+function isOrderVisibleToRole(order: any, role: StaffRole | "admin") {
+    if (role === "admin" || role === "manager") return true;
+    if (role === "baker") {
+        return isOperationallyClearedPayment(order.payment_status) && ["pending", "preparing", "prepared"].includes(order.status);
+    }
+    if (role === "delivery") {
+        return isOperationallyClearedPayment(order.payment_status) && ["prepared", "in transit", "delivered"].includes(order.status);
+    }
+    if (role === "accountant") {
+        return isOperationallyClearedPayment(order.payment_status);
+    }
+    return false;
+}
+
+function redactOrderForRole(order: any, role: StaffRole | "admin") {
+    if (role === "admin" || role === "manager") return order;
+    if (role === "baker") {
+        return {
+            ...order,
+            user_phone: "Restricted",
+            address_line1: null,
+            city: null,
+            pincode: null,
+            invoice_number: null,
+            invoice_pdf_url: null,
+        };
+    }
+    if (role === "accountant") {
+        return {
+            ...order,
+            address_line1: null,
+            city: null,
+            pincode: null,
+        };
+    }
+    return order;
 }
 
 const ORDER_FEEDBACK_STATUSES = ["open", "in_review", "resolved", "closed"] as const;
@@ -1448,17 +1634,27 @@ export async function updateOrderFeedbackStatus(ticketId: string, status: string
     }
 }
 
-export async function updateOrderStatus(orderId: string | number, status: string, staffId?: string | number) {
+export async function updateOrderStatus(orderId: string | number, status: string, _staffId?: string | number) {
+    void _staffId;
     const dbStatus = toDbOrderStatus(status);
     if (!dbStatus) {
         return { success: false as const, error: `Invalid status. Must be one of: ${Object.keys(LEGACY_TO_DB_ORDER_STATUS).join(", ")}` };
     }
 
     try {
+        const auth = await requireAdminOrStaffRoles(["admin", "manager", "baker", "delivery"]);
+        if (!auth.success) return auth;
+
+        const actorStaffId = auth.actor === "staff" ? auth.staff.id : null;
+        const actorRole = auth.actor === "staff" ? auth.staff.role : "admin";
+        if (!canRoleUpdateOrderStatus(actorRole, status)) {
+            return { success: false as const, error: "This role cannot move orders to that status." };
+        }
+
         const updated = await sql.begin(async (tx: any) => {
-            if (staffId) {
+            if (actorStaffId) {
                 await tx`SELECT set_config('app.actor_type', 'employee', true)`;
-                await tx`SELECT set_config('app.actor_id', ${String(staffId)}, true)`;
+                await tx`SELECT set_config('app.actor_id', ${String(actorStaffId)}, true)`;
                 await tx`SELECT set_config('app.order_status_reason', ${`Staff panel changed status to ${status}`}, true)`;
             }
 
@@ -1469,7 +1665,7 @@ export async function updateOrderStatus(orderId: string | number, status: string
                 RETURNING *
             `;
 
-            if (order && staffId) {
+            if (order && actorStaffId) {
                 if (dbStatus === "preparing") {
                     const [existing] = await tx`
                         SELECT id
@@ -1483,7 +1679,7 @@ export async function updateOrderStatus(orderId: string | number, status: string
                     if (existing) {
                         await tx`
                             UPDATE work_orders
-                            SET assigned_staff_id = ${staffId},
+                            SET assigned_staff_id = ${actorStaffId},
                                 work_status = 'in_progress'
                             WHERE id = ${existing.id}
                         `;
@@ -1495,7 +1691,7 @@ export async function updateOrderStatus(orderId: string | number, status: string
                             )
                             VALUES (
                                 ${orderId}, 'baking', 'in_progress', 'baker_chef',
-                                ${staffId}, ${`Prepare ${order.order_number}`}
+                                ${actorStaffId}, ${`Prepare ${order.order_number}`}
                             )
                         `;
                     }
@@ -1503,7 +1699,7 @@ export async function updateOrderStatus(orderId: string | number, status: string
                     const work = await tx`
                         UPDATE work_orders
                         SET work_status = 'completed',
-                            completed_by_staff_id = ${staffId}
+                            completed_by_staff_id = ${actorStaffId}
                         WHERE order_id = ${orderId}
                           AND task_type = 'baking'
                           AND work_status <> 'completed'
@@ -1517,7 +1713,7 @@ export async function updateOrderStatus(orderId: string | number, status: string
                             )
                             VALUES (
                                 ${orderId}, 'baking', 'completed', 'baker_chef',
-                                ${staffId}, ${staffId}, ${`Prepare ${order.order_number}`}
+                                ${actorStaffId}, ${actorStaffId}, ${`Prepare ${order.order_number}`}
                             )
                         `;
                     }
@@ -1534,7 +1730,7 @@ export async function updateOrderStatus(orderId: string | number, status: string
                     if (existing) {
                         await tx`
                             UPDATE work_orders
-                            SET assigned_staff_id = ${staffId},
+                            SET assigned_staff_id = ${actorStaffId},
                                 work_status = 'in_progress'
                             WHERE id = ${existing.id}
                         `;
@@ -1546,7 +1742,7 @@ export async function updateOrderStatus(orderId: string | number, status: string
                             )
                             VALUES (
                                 ${orderId}, 'delivery', 'in_progress', 'delivery_person',
-                                ${staffId}, ${`Deliver ${order.order_number}`}
+                                ${actorStaffId}, ${`Deliver ${order.order_number}`}
                             )
                         `;
                     }
@@ -1554,7 +1750,7 @@ export async function updateOrderStatus(orderId: string | number, status: string
                     const work = await tx`
                         UPDATE work_orders
                         SET work_status = 'completed',
-                            completed_by_staff_id = ${staffId}
+                            completed_by_staff_id = ${actorStaffId}
                         WHERE order_id = ${orderId}
                           AND task_type = 'delivery'
                           AND work_status <> 'completed'
@@ -1568,7 +1764,7 @@ export async function updateOrderStatus(orderId: string | number, status: string
                             )
                             VALUES (
                                 ${orderId}, 'delivery', 'completed', 'delivery_person',
-                                ${staffId}, ${staffId}, ${`Deliver ${order.order_number}`}
+                                ${actorStaffId}, ${actorStaffId}, ${`Deliver ${order.order_number}`}
                             )
                         `;
                     }
@@ -1586,8 +1782,14 @@ export async function updateOrderStatus(orderId: string | number, status: string
 }
 
 export async function staffLogin(email: string, pass: string) {
-    const schema = z.object({ email: z.string().email(), pass: z.string().min(1) });
-    const parsed = schema.safeParse({ email, pass });
+    const safeEmail = sanitizeLoginEmail(email);
+    const rateLimit = await consumeAuthRateLimit("staff", safeEmail || "blank");
+    if (!rateLimit.allowed) {
+        return { success: false as const, error: "Too many login attempts. Please try again later." };
+    }
+
+    const schema = z.object({ email: z.string().email().max(254), pass: z.string().min(1).max(256) });
+    const parsed = schema.safeParse({ email: safeEmail, pass });
     if (!parsed.success) {
         return { success: false as const, error: "Invalid credentials" };
     }
@@ -1626,6 +1828,7 @@ export async function staffLogin(email: string, pass: string) {
         staffSession.staff = staffWithoutHash;
         await staffSession.save();
 
+        clearAuthRateLimit(rateLimit.key);
         return { success: true as const, staff: staffWithoutHash };
     } catch (err) {
         console.error("Staff login failed:", err);
@@ -1732,27 +1935,32 @@ export async function updateUserDetails(id: string | number, name: string, email
     if (!isUuid(id)) {
         return { success: false, error: "Session user is no longer valid. Please sign in again." };
     }
+    const parsed = z.object({
+        name: z.string().trim().min(1).max(100),
+        email: z.string().trim().toLowerCase().email().max(254),
+    }).safeParse({ name, email });
+    if (!parsed.success) {
+        return { success: false, error: parsed.error.issues[0]?.message || "Invalid profile details" };
+    }
 
     try {
-        const { firstName, lastName } = splitName(name);
+        const sessionUser = await getUserSession();
+        if (!sessionUser?.id || !isUuid(sessionUser.id)) {
+            return { success: false, error: "Unauthorized. Please sign in again." };
+        }
+        requireSameUserId(sessionUser.id, id);
+
+        const { firstName, lastName } = splitName(parsed.data.name);
         const updatedUser = await sql.begin(async (tx: any) => {
             const [updated] = await tx`
                 UPDATE app_users
                 SET first_name = ${firstName},
                     last_name = ${lastName},
-                    email = ${email.trim()}
+                    email = ${parsed.data.email}
                 WHERE id = ${id}
-                RETURNING id
+                RETURNING id, first_name, last_name, email, mobile_no, payment_type, created_at
             `;
-            if (!updated) return null;
-
-            const [verified] = await tx`
-                UPDATE app_users
-                SET email_verified_at = COALESCE(email_verified_at, now())
-                WHERE id = ${id}
-                RETURNING id, first_name, last_name, email, mobile_no, created_at
-            `;
-            return toUserView(verified);
+            return updated ? toUserView(updated) : null;
         });
         if (!updatedUser) return { success: false, error: "User not found" };
         return { success: true, user: updatedUser };
@@ -1768,6 +1976,9 @@ export async function getAddresses(userId: string | number) {
     }
 
     try {
+        const auth = await requireUserDataAccess(userId, ["admin", "manager", "accountant"]);
+        if (!auth.success) return { ...auth, addresses: [] };
+
         const addresses = await sql`
             SELECT *
             FROM user_addresses
@@ -1790,6 +2001,12 @@ export async function addAddress(address: z.infer<typeof addressSchema>) {
     }
 
     try {
+        const sessionUser = await getUserSession();
+        if (!sessionUser?.id || !isUuid(sessionUser.id)) {
+            return { success: false, error: "Unauthorized. Please sign in again." };
+        }
+        requireSameUserId(sessionUser.id, parsed.data.user_id);
+
         return await sql.begin(async (tx: any) => {
             if (parsed.data.is_default) {
                 await tx`UPDATE user_addresses SET is_default = false WHERE user_id = ${parsed.data.user_id}`;
@@ -1819,6 +2036,12 @@ export async function updateAddress(id: string | number, userId: string | number
     }
 
     try {
+        const sessionUser = await getUserSession();
+        if (!sessionUser?.id || !isUuid(sessionUser.id)) {
+            return { success: false, error: "Unauthorized. Please sign in again." };
+        }
+        requireSameUserId(sessionUser.id, userId);
+
         return await sql.begin(async (tx: any) => {
             if (address.is_default) {
                 await tx`UPDATE user_addresses SET is_default = false WHERE user_id = ${userId}`;
@@ -1852,6 +2075,12 @@ export async function deleteAddress(id: string | number, userId: string | number
     }
 
     try {
+        const sessionUser = await getUserSession();
+        if (!sessionUser?.id || !isUuid(sessionUser.id)) {
+            return { success: false, error: "Unauthorized. Please sign in again." };
+        }
+        requireSameUserId(sessionUser.id, userId);
+
         await sql`
             UPDATE user_addresses
             SET is_active = false
@@ -1872,6 +2101,12 @@ export async function getUserOrders(userId: string | number) {
     }
 
     try {
+        const sessionUser = await getUserSession();
+        if (!sessionUser?.id || !isUuid(sessionUser.id)) {
+            return { success: false, error: "Unauthorized. Please sign in again.", orders: [] };
+        }
+        requireSameUserId(sessionUser.id, userId);
+
         const orders = await sql`
             SELECT
                 o.id,
@@ -2027,8 +2262,11 @@ export async function submitOrderIssue(formData: FormData) {
                 return { success: false as const, error: "Each optimized image must be 2MB or smaller." };
             }
 
-            const key = `order-feedback/${parsed.data.orderId}/${crypto.randomUUID()}.${fileExt}`;
             const buffer = Buffer.from(await file.arrayBuffer());
+            if (!hasAllowedImageSignature(buffer, file.type)) {
+                return { success: false as const, error: "Invalid image content. The file does not match its declared type." };
+            }
+            const key = `order-feedback/${parsed.data.orderId}/${crypto.randomUUID()}.${fileExt}`;
 
             try {
                 await s3Client.send(new PutObjectCommand({
@@ -2137,20 +2375,27 @@ function resolveRazorpayKeySecret() {
 
 export async function createRazorpayOrder(amount: number, localOrderId?: string | number) {
     try {
+        const sessionUser = await getUserSession();
+        if (!sessionUser?.id || !isUuid(sessionUser.id)) {
+            return { success: false, error: "Unauthorized. Please sign in again." };
+        }
+        if (!localOrderId || !isUuid(localOrderId)) {
+            return { success: false, error: "A valid local order ID is required." };
+        }
+
         let amountToCharge = amount;
         let localOrder: any = null;
-        if (localOrderId) {
-            const orders = await sql`
-                SELECT id, user_id, order_number, total_amount
-                FROM orders
-                WHERE id = ${localOrderId}
-            `;
-            localOrder = orders[0];
-            if (!localOrder) return { success: false, error: "Order not found" };
-            const dbAmount = Number(localOrder.total_amount);
-            // Use DB amount if valid, otherwise fall back to the caller-supplied amount
-            amountToCharge = dbAmount > 0 ? dbAmount : amount;
-        }
+        const orders = await sql`
+            SELECT id, user_id, order_number, total_amount
+            FROM orders
+            WHERE id = ${localOrderId}
+              AND user_id = ${sessionUser.id}
+        `;
+        localOrder = orders[0];
+        if (!localOrder) return { success: false, error: "Order not found" };
+        const dbAmount = Number(localOrder.total_amount);
+        // Use DB amount if valid, otherwise fall back to the caller-supplied amount.
+        amountToCharge = dbAmount > 0 ? dbAmount : amount;
 
         if (!amountToCharge || amountToCharge <= 0) {
             return { success: false, error: "Invalid order amount" };
@@ -2213,6 +2458,11 @@ export async function verifyRazorpayPayment(
     if (!rzp) return { success: false, error: "Payment system is not configured." };
 
     try {
+        const sessionUser = await getUserSession();
+        if (!sessionUser?.id || !isUuid(sessionUser.id)) {
+            return { success: false, error: "Unauthorized. Please sign in again." };
+        }
+
         const body = razorpayOrderId + "|" + razorpayPaymentId;
         const expectedSignature = crypto
             .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET!)
@@ -2225,6 +2475,7 @@ export async function verifyRazorpayPayment(
                     SELECT id, user_id, total_amount
                     FROM orders
                     WHERE id = ${orderId}
+                      AND user_id = ${sessionUser.id}
                 `;
                 if (!order) throw new Error("Order not found");
 
@@ -2305,6 +2556,7 @@ export async function verifyRazorpayPayment(
             SELECT id, user_id, total_amount
             FROM orders
             WHERE id = ${orderId}
+              AND user_id = ${sessionUser.id}
         `;
         if (order) {
             await sql`
@@ -2340,7 +2592,7 @@ const placeOrderSchema = z.object({
     userId: uuidId,
     items: z.array(z.object({
         id: uuidId,
-        quantity: z.number().positive(),
+        quantity: z.coerce.number().int().positive().max(MAX_CART_ITEM_QUANTITY),
     })).min(1),
     addressId: uuidId,
 });
@@ -2352,7 +2604,7 @@ const staffPlaceOrderSchema = placeOrderSchema.extend({
 const cartLimitValidationSchema = z.object({
     items: z.array(z.object({
         id: uuidId,
-        quantity: z.number().positive(),
+        quantity: z.coerce.number().int().positive().max(MAX_CART_ITEM_QUANTITY),
     })).min(1),
 });
 
@@ -2393,12 +2645,72 @@ async function getAuthenticatedStaffForOrderOnBehalf() {
     return { success: true as const, staff: staffView };
 }
 
+function normalizeOrderItemsForComparison(items: { product_id?: string | number; id?: string | number; quantity: number }[]) {
+    return items
+        .map((item) => ({
+            productId: String(item.product_id ?? item.id),
+            quantity: Number(item.quantity),
+        }))
+        .sort((a, b) => a.productId.localeCompare(b.productId));
+}
+
+function haveSameOrderItems(
+    a: { product_id?: string | number; id?: string | number; quantity: number }[],
+    b: { product_id?: string | number; id?: string | number; quantity: number }[]
+) {
+    const left = normalizeOrderItemsForComparison(a);
+    const right = normalizeOrderItemsForComparison(b);
+    if (left.length !== right.length) return false;
+    return left.every((item, index) => item.productId === right[index].productId && item.quantity === right[index].quantity);
+}
+
+async function findRecentDuplicateOrder(input: {
+    userId: string;
+    addressId: string;
+    orderStatus: OrderStatus;
+    calculatedTotal: number;
+    finalItems: { product_id: string | number; quantity: number }[];
+}) {
+    const candidates = await sql`
+        SELECT
+            o.id,
+            o.order_number,
+            o.total_amount,
+            COALESCE(
+                JSON_AGG(
+                    JSON_BUILD_OBJECT(
+                        'product_id', oi.product_id,
+                        'quantity', oi.quantity
+                    ) ORDER BY oi.product_id
+                ) FILTER (WHERE oi.id IS NOT NULL),
+                '[]'
+            ) AS items
+        FROM orders o
+        LEFT JOIN order_items oi ON oi.order_id = o.id
+        WHERE o.user_id = ${input.userId}
+          AND o.delivery_address_id = ${input.addressId}
+          AND o.order_source = 'web'
+          AND o.placed_by = 'self'
+          AND o.order_status = ${input.orderStatus}
+          AND o.created_at >= now() - interval '2 minutes'
+        GROUP BY o.id
+        ORDER BY o.created_at DESC
+        LIMIT 5
+    `;
+
+    return candidates.find((order: any) =>
+        Math.abs(Number(order.total_amount || 0) - input.calculatedTotal) <= 0.5 &&
+        haveSameOrderItems(order.items || [], input.finalItems)
+    );
+}
+
 async function createOrderForUser(input: {
     userId: string;
     items: { id: string, quantity: number }[];
     addressId: string;
     paymentMode: OrderPaymentMode;
     frontendTotal?: number;
+    idempotencyKey?: string | null;
     placedByStaffId?: string;
     allowPostpaidOverLimit?: boolean;
 }) {
@@ -2426,6 +2738,18 @@ async function createOrderForUser(input: {
 
     if (!userProfile) {
         return { success: false, error: "User not found" };
+    }
+
+    const [deliveryAddress] = await sql`
+        SELECT id
+        FROM user_addresses
+        WHERE id = ${input.addressId}
+          AND user_id = ${input.userId}
+          AND is_active = true
+    `;
+
+    if (!deliveryAddress) {
+        return { success: false, error: "Invalid delivery address" };
     }
 
     const isEligibleForPostpaid = userProfile.payment_type === "postpaid_user";
@@ -2477,8 +2801,31 @@ async function createOrderForUser(input: {
         }
     }
 
+    const isStaffOrder = Boolean(input.placedByStaffId);
+    const targetStatus = (isPostpaidUser || isStaffOrder ? "placed" : "payment_pending") as OrderStatus;
+
+    // SERVER-SIDE REQUIREMENT: add a persisted checkout idempotency key with a unique index for strict replay protection.
+    if (input.idempotencyKey && !isStaffOrder) {
+        const duplicate = await findRecentDuplicateOrder({
+            userId: input.userId,
+            addressId: input.addressId,
+            orderStatus: targetStatus,
+            calculatedTotal,
+            finalItems,
+        });
+        if (duplicate) {
+            return {
+                success: true,
+                orderId: duplicate.id,
+                orderNumber: duplicate.order_number,
+                total: Number(duplicate.total_amount),
+                paymentMode: isPostpaidUser ? "postpaid" : "prepaid",
+                reused: true,
+            };
+        }
+    }
+
     return await sql.begin(async (tx: any) => {
-        const isStaffOrder = Boolean(input.placedByStaffId);
         const [order] = await tx`
             INSERT INTO orders (
                 user_id, delivery_address_id, fulfillment_type,
@@ -2492,7 +2839,7 @@ async function createOrderForUser(input: {
                 ${isStaffOrder ? 'phone' : 'web'},
                 ${isStaffOrder ? 'staff' : 'self'},
                 ${input.placedByStaffId || null},
-                ${isPostpaidUser || isStaffOrder ? 'placed' : 'payment_pending'},
+                ${targetStatus},
                 ${isPostpaidUser ? 'postpaid_user' : 'prepaid_user'}
             )
             RETURNING id
@@ -2661,6 +3008,7 @@ export async function validatePendingOrderForPayment(orderId: string | number, u
         if (!session?.user) {
             return { success: false as const, error: "Unauthorized. Please log in again." };
         }
+        requireSameUserId(session.user.id, userId);
 
         const [order] = await sql`
             SELECT id, order_status
@@ -2703,7 +3051,8 @@ export async function placeOrder(
     items: { id: string | number, quantity: number }[],
     frontendTotal: number,
     addressId: string | number,
-    paymentMode: "prepaid" | "postpaid" = "prepaid"
+    paymentMode: "prepaid" | "postpaid" = "prepaid",
+    checkoutIdempotencyKey?: string
 ) {
     try {
         // 1. Verify User Session
@@ -2711,6 +3060,7 @@ export async function placeOrder(
         if (!session?.user) {
             return { success: false, error: "Unauthorized. Please log in again." };
         }
+        requireSameUserId(session.user.id, userId);
 
         if (isOrderingClosed()) {
             return { success: false, error: ORDERING_CLOSED_ERROR };
@@ -2723,6 +3073,7 @@ export async function placeOrder(
         }
 
         const validData = parsed.data;
+        const idempotencyKey = validateCheckoutIdempotencyKey(checkoutIdempotencyKey);
 
         return await createOrderForUser({
             userId: validData.userId,
@@ -2730,6 +3081,7 @@ export async function placeOrder(
             addressId: validData.addressId,
             paymentMode,
             frontendTotal,
+            idempotencyKey,
         });
     } catch (err) {
         console.error("Failed to place order:", err);
@@ -2769,6 +3121,9 @@ export async function staffPlaceOrder(
 // --- USER PRICING MANAGEMENT ---
 
 export async function getUsers() {
+    const auth = await requireAdminOrStaffRoles(["admin", "manager", "accountant"]);
+    if (!auth.success) return { ...auth, users: [] };
+
     try {
         const users = await sql`
             SELECT
@@ -2802,6 +3157,9 @@ export async function getUserBillingSummary(userId: string | number) {
     }
 
     try {
+        const auth = await requireUserDataAccess(userId, ["admin", "manager", "accountant"]);
+        if (!auth.success) return auth;
+
         return await getUserBillingSummaryInternal(userId);
     } catch (err) {
         console.error("Failed to fetch user billing summary:", err);
@@ -2818,6 +3176,9 @@ export async function updateUserBillingSettings(input: {
     invoiceEmail?: string;
     notes?: string;
 }) {
+    const auth = await requireAdminAction();
+    if (!auth.success) return auth;
+
     if (!isUuid(input.userId)) {
         return { success: false as const, error: "Invalid user ID" };
     }
@@ -2875,6 +3236,9 @@ export async function updateUserBillingSettings(input: {
 }
 
 export async function getUserPrices(userId: string | number) {
+    const auth = await requireAdminAction();
+    if (!auth.success) return { ...auth, prices: [] };
+
     if (!isUuid(userId)) {
         return { success: false, error: "Session user is no longer valid. Please sign in again.", prices: [] };
     }
@@ -2894,6 +3258,9 @@ export async function getUserPrices(userId: string | number) {
 }
 
 export async function setUserPrice(userId: string | number, productId: string | number, price: number) {
+    const auth = await requireAdminAction();
+    if (!auth.success) return auth;
+
     if (!isUuid(userId) || !isUuid(productId)) {
         return { success: false, error: "Invalid user or product id" };
     }
@@ -2933,6 +3300,7 @@ export async function retryInvoiceGeneration(orderId: string, userId: string) {
         if (!session?.user) {
             return { success: false, error: "Unauthorized. Please sign in again." };
         }
+        requireSameUserId(session.user.id, userId);
 
         const [order] = await sql`
             SELECT id, payment_type_snapshot FROM orders

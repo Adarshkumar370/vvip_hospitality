@@ -191,7 +191,7 @@ export default function AuthModal({ isOpen, onClose, redirectTo = "/bakery/order
             onClose();
             router.push(redirectTo);
         } else {
-            setError(result.error || "Signup failed");
+            setError(("error" in result && result.error) || "Signup failed");
         }
         setIsLoading(false);
     };
@@ -199,7 +199,7 @@ export default function AuthModal({ isOpen, onClose, redirectTo = "/bakery/order
     return (
         <AnimatePresence>
             {isOpen && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center px-6">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
@@ -212,7 +212,7 @@ export default function AuthModal({ isOpen, onClose, redirectTo = "/bakery/order
                         initial={{ opacity: 0, scale: 0.9, y: 20 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                        className="relative w-full max-w-md bg-white rounded-[3rem] shadow-2xl overflow-hidden border border-white/20"
+                        className="relative w-full max-w-md max-h-[calc(100svh-2rem)] overflow-y-auto bg-white rounded-[2rem] sm:rounded-[3rem] shadow-2xl border border-white/20"
                     >
                         {/* Dark Header Strip */}
                         <div className="bg-brand-olive-dark h-2 w-full" />
@@ -222,12 +222,13 @@ export default function AuthModal({ isOpen, onClose, redirectTo = "/bakery/order
 
                         <button
                             onClick={onClose}
-                            className="absolute top-6 right-6 text-gray-400 hover:text-brand-olive-dark transition-colors"
+                            className="absolute top-4 right-4 sm:top-6 sm:right-6 flex h-11 w-11 items-center justify-center rounded-full text-gray-400 hover:text-brand-olive-dark transition-colors"
+                            aria-label="Close authentication modal"
                         >
                             <X size={24} />
                         </button>
 
-                        <div className="p-10 md:p-12">
+                        <div className="p-6 sm:p-10 md:p-12">
                             {step === "phone" && (
                                 <motion.div
                                     initial={{ opacity: 0 }}
@@ -296,7 +297,7 @@ export default function AuthModal({ isOpen, onClose, redirectTo = "/bakery/order
                                                 placeholder="000000"
                                                 value={otp}
                                                 onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
-                                                className="w-full bg-brand-soft-gray border-2 border-transparent focus:border-brand-gold-bright/30 focus:bg-white outline-none rounded-2xl py-5 px-6 text-center text-3xl font-black tracking-[0.5em] text-brand-olive-dark transition-all"
+                                                className="w-full bg-brand-soft-gray border-2 border-transparent focus:border-brand-gold-bright/30 focus:bg-white outline-none rounded-2xl py-5 px-4 text-center text-2xl sm:text-3xl font-black tracking-[0.35em] sm:tracking-[0.5em] text-brand-olive-dark transition-all"
                                             />
                                         </div>
                                         {error && <p className="text-red-500 text-sm font-black text-center tracking-tight">{error}</p>}

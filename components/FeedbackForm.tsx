@@ -41,9 +41,87 @@ import { submitGuestFeedback } from "@/lib/actions/feedback";
 const RATING_OPTIONS: RatingOption[] = ["Excellent", "Good", "Average", "Poor"];
 const YES_NO_OPTIONS: YesNoOption[] = ["Yes", "Maybe", "No"];
 
+function SectionHeader({ title, subtitle }: { title: string, subtitle?: string }) {
+    return (
+        <div className="mb-8 border-b border-gray-100 pb-4">
+            <h3 className="text-2xl font-serif font-black text-brand-olive-dark tracking-tight">{title}</h3>
+            {subtitle && <p className="text-sm text-gray-500 font-medium mt-1">{subtitle}</p>}
+        </div>
+    );
+}
+
+function RatingQuery({
+    question,
+    field,
+    value,
+    onChange,
+}: {
+    question: string;
+    field: keyof FeedbackData;
+    value: string;
+    onChange: (field: keyof FeedbackData, value: string) => void;
+}) {
+    return (
+        <div className="mb-6 bg-brand-soft-gray/30 p-5 sm:p-6 rounded-2xl border border-gray-50 hover:bg-white hover:shadow-md transition-all">
+            <p className="font-bold text-brand-olive-dark mb-4">{question}</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {RATING_OPTIONS.map(opt => (
+                    <button
+                        type="button"
+                        key={opt}
+                        onClick={() => onChange(field, opt)}
+                        className={`py-3 px-2 sm:px-4 rounded-xl text-xs sm:text-sm font-bold border transition-all ${
+                            value === opt 
+                                ? "bg-brand-olive-dark text-white border-brand-olive-dark shadow-md" 
+                                : "bg-white text-gray-600 border-gray-200 hover:border-brand-gold-bright hover:text-brand-gold-bright"
+                        }`}
+                    >
+                        {opt}
+                    </button>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function YesNoQuery({
+    question,
+    field,
+    value,
+    onChange,
+}: {
+    question: string;
+    field: keyof FeedbackData;
+    value: string;
+    onChange: (field: keyof FeedbackData, value: string) => void;
+}) {
+    return (
+        <div className="mb-6 bg-brand-soft-gray/30 p-5 sm:p-6 rounded-2xl border border-gray-50 hover:bg-white hover:shadow-md transition-all">
+            <p className="font-bold text-brand-olive-dark mb-4">{question}</p>
+            <div className="grid grid-cols-3 gap-3">
+                {YES_NO_OPTIONS.map(opt => (
+                    <button
+                        type="button"
+                        key={opt}
+                        onClick={() => onChange(field, opt)}
+                        className={`py-3 px-2 sm:px-4 rounded-xl text-xs sm:text-sm font-bold border transition-all ${
+                            value === opt 
+                                ? "bg-brand-olive-dark text-white border-brand-olive-dark shadow-md" 
+                                : "bg-white text-gray-600 border-gray-200 hover:border-brand-gold-bright hover:text-brand-gold-bright"
+                        }`}
+                    >
+                        {opt}
+                    </button>
+                ))}
+            </div>
+        </div>
+    );
+}
+
 export function FeedbackForm() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
+    const [submitError, setSubmitError] = useState("");
     
     const [formData, setFormData] = useState<FeedbackData>({
         hotelName: "OLIVE STAYZ", // Default as per reception page
@@ -80,7 +158,9 @@ export function FeedbackForm() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (isSubmitting) return;
         setIsSubmitting(true);
+        setSubmitError("");
         
         try {
             const result = await submitGuestFeedback(formData);
@@ -120,66 +200,15 @@ export function FeedbackForm() {
                     });
                 }, 5000);
             } else {
-                alert(result.error || "Failed to submit feedback");
+                setSubmitError(result.error || "Failed to submit feedback");
             }
         } catch (error) {
             console.error("Submission error:", error);
-            alert("An unexpected error occurred. Please try again.");
+            setSubmitError("An unexpected error occurred. Please try again.");
         } finally {
             setIsSubmitting(false);
         }
     };
-
-    const SectionHeader = ({ title, subtitle }: { title: string, subtitle?: string }) => (
-        <div className="mb-8 border-b border-gray-100 pb-4">
-            <h3 className="text-2xl font-serif font-black text-brand-olive-dark tracking-tight">{title}</h3>
-            {subtitle && <p className="text-sm text-gray-500 font-medium mt-1">{subtitle}</p>}
-        </div>
-    );
-
-    const RatingQuery = ({ question, field }: { question: string, field: keyof FeedbackData }) => (
-        <div className="mb-6 bg-brand-soft-gray/30 p-5 sm:p-6 rounded-2xl border border-gray-50 hover:bg-white hover:shadow-md transition-all">
-            <p className="font-bold text-brand-olive-dark mb-4">{question}</p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {RATING_OPTIONS.map(opt => (
-                    <button
-                        type="button"
-                        key={opt}
-                        onClick={() => handleInputChange(field, opt)}
-                        className={`py-3 px-2 sm:px-4 rounded-xl text-xs sm:text-sm font-bold border transition-all ${
-                            formData[field] === opt 
-                                ? "bg-brand-olive-dark text-white border-brand-olive-dark shadow-md" 
-                                : "bg-white text-gray-600 border-gray-200 hover:border-brand-gold-bright hover:text-brand-gold-bright"
-                        }`}
-                    >
-                        {opt}
-                    </button>
-                ))}
-            </div>
-        </div>
-    );
-
-    const YesNoQuery = ({ question, field }: { question: string, field: keyof FeedbackData }) => (
-        <div className="mb-6 bg-brand-soft-gray/30 p-5 sm:p-6 rounded-2xl border border-gray-50 hover:bg-white hover:shadow-md transition-all">
-            <p className="font-bold text-brand-olive-dark mb-4">{question}</p>
-            <div className="grid grid-cols-3 gap-3">
-                {YES_NO_OPTIONS.map(opt => (
-                    <button
-                        type="button"
-                        key={opt}
-                        onClick={() => handleInputChange(field, opt)}
-                        className={`py-3 px-2 sm:px-4 rounded-xl text-xs sm:text-sm font-bold border transition-all ${
-                            formData[field] === opt 
-                                ? "bg-brand-olive-dark text-white border-brand-olive-dark shadow-md" 
-                                : "bg-white text-gray-600 border-gray-200 hover:border-brand-gold-bright hover:text-brand-gold-bright"
-                        }`}
-                    >
-                        {opt}
-                    </button>
-                ))}
-            </div>
-        </div>
-    );
 
     if (isSubmitted) {
         return (
@@ -230,6 +259,7 @@ export function FeedbackForm() {
                             </div>
                             <input 
                                 type="text" required placeholder="Hotel Name" 
+                                maxLength={80}
                                 value={formData.hotelName} onChange={(e) => handleInputChange("hotelName", e.target.value)}
                                 className="w-full pl-12 pr-5 py-4 bg-brand-soft-gray/50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-gold-bright/30 focus:border-brand-gold-bright/50 transition-all font-bold text-brand-olive-dark placeholder:font-medium placeholder:text-gray-400"
                             />
@@ -240,6 +270,7 @@ export function FeedbackForm() {
                             </div>
                             <input 
                                 type="text" required placeholder="Room Number" 
+                                maxLength={20}
                                 value={formData.roomNumber} onChange={(e) => handleInputChange("roomNumber", e.target.value)}
                                 className="w-full pl-12 pr-5 py-4 bg-brand-soft-gray/50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-gold-bright/30 focus:border-brand-gold-bright/50 transition-all font-bold text-brand-olive-dark placeholder:font-medium placeholder:text-gray-400"
                             />
@@ -250,6 +281,7 @@ export function FeedbackForm() {
                             </div>
                             <input 
                                 type="text" placeholder="Guest Name (Optional)" 
+                                maxLength={100}
                                 value={formData.guestName} onChange={(e) => handleInputChange("guestName", e.target.value)}
                                 className="w-full pl-12 pr-5 py-4 bg-brand-soft-gray/50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-gold-bright/30 focus:border-brand-gold-bright/50 transition-all font-bold text-brand-olive-dark placeholder:font-medium placeholder:text-gray-400"
                             />
@@ -306,6 +338,7 @@ export function FeedbackForm() {
                                     <input 
                                         type="text" placeholder="Please specify..." 
                                         required
+                                        maxLength={100}
                                         value={formData.bookingMethodOther} onChange={(e) => handleInputChange("bookingMethodOther", e.target.value)}
                                         className="w-full mt-3 p-4 bg-brand-soft-gray/50 border border-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-gold-bright/30"
                                     />
@@ -337,6 +370,7 @@ export function FeedbackForm() {
                                     <input 
                                         type="text" placeholder="Please specify..." 
                                         required
+                                        maxLength={100}
                                         value={formData.purposeOfVisitOther} onChange={(e) => handleInputChange("purposeOfVisitOther", e.target.value)}
                                         className="w-full mt-3 p-4 bg-brand-soft-gray/50 border border-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-gold-bright/30"
                                     />
@@ -349,35 +383,35 @@ export function FeedbackForm() {
                 {/* 3. Cleanliness */}
                 <section>
                     <SectionHeader title="Cleanliness" />
-                    <RatingQuery question="3. Cleanliness of the room" field="cleanlinessRoom" />
-                    <RatingQuery question="4. Cleanliness of bathroom" field="cleanlinessBathroom" />
+                    <RatingQuery question="3. Cleanliness of the room" field="cleanlinessRoom" value={formData.cleanlinessRoom} onChange={handleInputChange} />
+                    <RatingQuery question="4. Cleanliness of bathroom" field="cleanlinessBathroom" value={formData.cleanlinessBathroom} onChange={handleInputChange} />
                 </section>
 
                 {/* 4. Comfort & Facilities */}
                 <section>
                     <SectionHeader title="Comfort & Facilities" />
-                    <RatingQuery question="5. Comfort of bed and linen" field="comfortBed" />
-                    <RatingQuery question="6. Room facilities (lighting, charging points, furniture)" field="roomFacilities" />
-                    <RatingQuery question="7. Bathroom facilities (water pressure, hot water availability, fittings)" field="bathroomFacilities" />
-                    <RatingQuery question="8. Wi-Fi connectivity in the room" field="wifi" />
-                    <RatingQuery question="9. Noise levels / quietness of room" field="noiseLevels" />
+                    <RatingQuery question="5. Comfort of bed and linen" field="comfortBed" value={formData.comfortBed} onChange={handleInputChange} />
+                    <RatingQuery question="6. Room facilities (lighting, charging points, furniture)" field="roomFacilities" value={formData.roomFacilities} onChange={handleInputChange} />
+                    <RatingQuery question="7. Bathroom facilities (water pressure, hot water availability, fittings)" field="bathroomFacilities" value={formData.bathroomFacilities} onChange={handleInputChange} />
+                    <RatingQuery question="8. Wi-Fi connectivity in the room" field="wifi" value={formData.wifi} onChange={handleInputChange} />
+                    <RatingQuery question="9. Noise levels / quietness of room" field="noiseLevels" value={formData.noiseLevels} onChange={handleInputChange} />
                 </section>
 
                 {/* 5. Service & Value */}
                 <section>
                     <SectionHeader title="Service & Value" />
-                    <RatingQuery question="10. Safety and security in the hotel" field="safety" />
-                    <RatingQuery question="11. Helpfulness and behaviour of hotel staff" field="staffBehavior" />
-                    <RatingQuery question="12. Speed of check-in and check-out process" field="checkInSpeed" />
-                    <RatingQuery question="13. Maintenance condition of the room (AC, lights, fittings)" field="maintenance" />
-                    <RatingQuery question="14. Value for money" field="valueForMoney" />
+                    <RatingQuery question="10. Safety and security in the hotel" field="safety" value={formData.safety} onChange={handleInputChange} />
+                    <RatingQuery question="11. Helpfulness and behaviour of hotel staff" field="staffBehavior" value={formData.staffBehavior} onChange={handleInputChange} />
+                    <RatingQuery question="12. Speed of check-in and check-out process" field="checkInSpeed" value={formData.checkInSpeed} onChange={handleInputChange} />
+                    <RatingQuery question="13. Maintenance condition of the room (AC, lights, fittings)" field="maintenance" value={formData.maintenance} onChange={handleInputChange} />
+                    <RatingQuery question="14. Value for money" field="valueForMoney" value={formData.valueForMoney} onChange={handleInputChange} />
                 </section>
 
                 {/* 6. Overall Experience */}
                 <section>
                     <SectionHeader title="Overall Experience" />
-                    <YesNoQuery question="15. Would you stay with us again?" field="stayAgain" />
-                    <YesNoQuery question="16. Would you recommend our hotel to others?" field="recommend" />
+                    <YesNoQuery question="15. Would you stay with us again?" field="stayAgain" value={formData.stayAgain} onChange={handleInputChange} />
+                    <YesNoQuery question="16. Would you recommend our hotel to others?" field="recommend" value={formData.recommend} onChange={handleInputChange} />
                 </section>
 
                 {/* 7. Final Thoughts */}
@@ -388,6 +422,7 @@ export function FeedbackForm() {
                             <p className="font-bold text-brand-olive-dark mb-3">17. What did you like most about your stay?</p>
                             <textarea 
                                 rows={3}
+                                maxLength={1000}
                                 value={formData.likeMost} onChange={(e) => handleInputChange("likeMost", e.target.value)}
                                 className="w-full p-4 bg-brand-soft-gray/50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-gold-bright/30 focus:border-brand-gold-bright/50 transition-all font-medium text-brand-olive-dark resize-none"
                             ></textarea>
@@ -396,6 +431,7 @@ export function FeedbackForm() {
                             <p className="font-bold text-brand-olive-dark mb-3">18. What can we improve?</p>
                             <textarea 
                                 rows={3}
+                                maxLength={1000}
                                 value={formData.improve} onChange={(e) => handleInputChange("improve", e.target.value)}
                                 className="w-full p-4 bg-brand-soft-gray/50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-gold-bright/30 focus:border-brand-gold-bright/50 transition-all font-medium text-brand-olive-dark resize-none"
                             ></textarea>
@@ -404,6 +440,7 @@ export function FeedbackForm() {
                             <p className="font-bold text-brand-olive-dark mb-3">19. Any additional comments or suggestions</p>
                             <textarea 
                                 rows={3}
+                                maxLength={1000}
                                 value={formData.additionalComments} onChange={(e) => handleInputChange("additionalComments", e.target.value)}
                                 className="w-full p-4 bg-brand-soft-gray/50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-gold-bright/30 focus:border-brand-gold-bright/50 transition-all font-medium text-brand-olive-dark resize-none"
                             ></textarea>
@@ -412,6 +449,11 @@ export function FeedbackForm() {
                 </section>
 
                 <div className="pt-8 border-t border-gray-100">
+                    {submitError && (
+                        <p className="mb-4 rounded-2xl bg-red-50 px-4 py-3 text-sm font-bold text-red-600">
+                            {submitError}
+                        </p>
+                    )}
                     <button
                         type="submit"
                         disabled={isSubmitting}

@@ -157,10 +157,11 @@ export default function RoomsPage() {
                                 ))}
                             </div>
 
-                            <Link href="https://wa.me/919599519696">
-                                <button className="px-10 py-5 bg-black text-white font-black uppercase tracking-widest text-sm rounded-full shadow-xl hover:bg-[#C5A04D] transition-all active:scale-95">
-                                    Enquire Now
-                                </button>
+                            <Link
+                                href="https://wa.me/919599519696"
+                                className="inline-flex w-full sm:w-auto items-center justify-center px-10 py-5 bg-black text-white font-black uppercase tracking-widest text-sm rounded-full shadow-xl hover:bg-[#C5A04D] transition-all active:scale-95"
+                            >
+                                Enquire Now
                             </Link>
                         </motion.div>
                     </div>
@@ -201,15 +202,17 @@ export default function RoomsPage() {
                         Contact us today for reservations and long-term stay enquiries.
                     </p>
                     <div className="flex flex-col sm:flex-row gap-6 justify-center">
-                        <Link href="tel:+919599519696">
-                            <button className="w-full sm:w-auto px-12 py-6 bg-black text-white font-black uppercase tracking-widest rounded-full shadow-2xl hover:bg-[#376C34] transition-all">
-                                Call Us Directly
-                            </button>
+                        <Link
+                            href="tel:+919599519696"
+                            className="inline-flex w-full sm:w-auto items-center justify-center px-12 py-6 bg-black text-white font-black uppercase tracking-widest rounded-full shadow-2xl hover:bg-[#376C34] transition-all"
+                        >
+                            Call Us Directly
                         </Link>
-                        <Link href="https://wa.me/919599519696">
-                            <button className="w-full sm:w-auto px-12 py-6 border-2 border-black text-black font-black uppercase tracking-widest rounded-full hover:bg-black hover:text-white transition-all">
-                                WhatsApp Us
-                            </button>
+                        <Link
+                            href="https://wa.me/919599519696"
+                            className="inline-flex w-full sm:w-auto items-center justify-center px-12 py-6 border-2 border-black text-black font-black uppercase tracking-widest rounded-full hover:bg-black hover:text-white transition-all"
+                        >
+                            WhatsApp Us
                         </Link>
                     </div>
                 </div>

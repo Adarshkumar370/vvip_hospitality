@@ -320,8 +320,9 @@ export function StaffLoginGateway() {
                                 <input
                                     required
                                     type="email"
+                                    maxLength={254}
                                     value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
+                                    onChange={(e) => setEmail(e.target.value.slice(0, 254))}
                                     className="w-full rounded-2xl border-2 border-transparent bg-brand-soft-gray px-8 py-5 text-sm font-bold text-brand-olive-dark outline-none transition-all focus:border-brand-gold-bright/30"
                                     placeholder="staff@vvip.com"
                                 />
@@ -332,8 +333,9 @@ export function StaffLoginGateway() {
                                 <input
                                     required
                                     type="password"
+                                    maxLength={256}
                                     value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
+                                    onChange={(e) => setPassword(e.target.value.slice(0, 256))}
                                     className="w-full rounded-2xl border-2 border-transparent bg-brand-soft-gray px-8 py-5 text-sm font-bold text-brand-olive-dark outline-none transition-all focus:border-brand-gold-bright/30"
                                     placeholder="••••••••"
                                 />

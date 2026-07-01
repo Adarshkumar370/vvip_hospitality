@@ -47,6 +47,8 @@ export interface UserSessionData {
         phone: string;
         payment_type?: string;
     }
+    verifiedPhone?: string;
+    verifiedPhoneExpiresAt?: number;
 }
 
 export const userSessionOptions: SessionOptions = {

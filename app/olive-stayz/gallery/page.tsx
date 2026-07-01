@@ -212,7 +212,7 @@ export default function GalleryPage() {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.92 }}
               transition={{ duration: 0.3 }}
-              className="relative max-w-5xl max-h-[80vh] w-full mx-16 md:mx-24 flex items-center justify-center"
+              className="relative w-[calc(100vw-2rem)] max-w-5xl max-h-[75svh] mx-4 md:mx-24 flex items-center justify-center"
               onClick={(e) => e.stopPropagation()}
             >
               <Image
@@ -220,7 +220,7 @@ export default function GalleryPage() {
                 alt={filteredImages[lightboxIndex].alt}
                 width={1200}
                 height={800}
-                className="object-contain max-h-[80vh] w-auto rounded-2xl shadow-2xl"
+                className="max-h-[75svh] max-w-full w-full h-auto object-contain rounded-2xl shadow-2xl"
                 priority
               />
               {/* Caption */}
