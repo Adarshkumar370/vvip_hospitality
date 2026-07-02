@@ -9,8 +9,10 @@ import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import AuthModal from "@/components/auth/AuthModal";
 
+const LOGIN_BOUNCE_KEY = "vvip_bakery_login_bounce";
+
 export default function BakeryNavbar() {
-    const { user, logout } = useAuth();
+    const { user, logout, isLoading } = useAuth();
     const { totalItems } = useCart();
     const router = useRouter();
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -41,18 +43,42 @@ export default function BakeryNavbar() {
     }, []);
 
     useEffect(() => {
-        if (searchParams.get("login") !== "1") return;
+        if (searchParams.get("login") !== "1") {
+            // Landed on a normal page — any earlier bounce attempt clearly resolved.
+            sessionStorage.removeItem(LOGIN_BOUNCE_KEY);
+            return;
+        }
+        // Wait for the cached localStorage user to be confirmed against the real
+        // (httpOnly-cookie-backed) server session. Redirecting on the optimistic
+        // cached value here caused an infinite bounce between the protected page
+        // and this login redirect whenever the cookie was missing/expired but the
+        // localStorage cache wasn't: the protected page keeps sending the browser
+        // back here, and this effect kept sending it right back.
+        if (isLoading) return;
 
         const next = searchParams.get("next");
         const safeNext = next?.startsWith("/bakery") ? next : "/bakery/order";
         if (user) {
+            // Circuit breaker: if we already tried sending the browser to safeNext
+            // once with this same cached user and it bounced straight back here,
+            // the client's cached session doesn't match what the server accepts
+            // (stale/foreign cookie, lost Set-Cookie, etc). Redirecting again would
+            // loop forever — drop the stale cache and force a real login instead.
+            if (sessionStorage.getItem(LOGIN_BOUNCE_KEY) === safeNext) {
+                sessionStorage.removeItem(LOGIN_BOUNCE_KEY);
+                logout();
+                setAuthRedirectTo(safeNext);
+                setIsAuthModalOpen(true);
+                return;
+            }
+            sessionStorage.setItem(LOGIN_BOUNCE_KEY, safeNext);
             router.replace(safeNext, { scroll: false });
             return;
         }
 
         setAuthRedirectTo(safeNext);
         setIsAuthModalOpen(true);
-    }, [searchParams, user, router]);
+    }, [searchParams, user, isLoading, router]);
 
     const openAuthModal = (redirectTo = "/bakery/order") => {
         setAuthRedirectTo(redirectTo);

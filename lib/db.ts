@@ -18,7 +18,7 @@ function getTimeoutMs(envName: string, fallbackMs: number) {
 // Singleton pattern to prevent multiple connections during hot-reloading in dev
 const globalForSql = global as unknown as { sql: ReturnType<typeof postgres> };
 
-const sql = globalForSql.sql || postgres(connectionString as string, {
+const client = globalForSql.sql || postgres(connectionString as string, {
     ssl: "require",
     max: 5,
     idle_timeout: 20,
@@ -30,6 +30,36 @@ const sql = globalForSql.sql || postgres(connectionString as string, {
     },
 });
 
-if (process.env.NODE_ENV !== "production") globalForSql.sql = sql;
+if (process.env.NODE_ENV !== "production") globalForSql.sql = client;
+
+// The DB host (Supabase/Railway) pauses when idle, so the first query after a cold
+// start hits Postgres mid-boot and fails with 57P03 ("the database system is
+// starting up"). That window is usually a few seconds, so retrying with backoff
+// rides it out instead of surfacing a false failure. Transactions (sql.begin) are
+// intentionally left unwrapped since retrying multi-statement side effects isn't safe.
+const COLD_START_RETRY_DELAYS_MS = [500, 1500, 3000];
+
+function isColdStartError(err: unknown) {
+    return typeof err === "object" && err !== null && (err as { code?: string }).code === "57P03";
+}
+
+function sleep(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+const sql = new Proxy(client, {
+    apply(target, thisArg, args) {
+        return (async () => {
+            for (let attempt = 0; ; attempt++) {
+                try {
+                    return await Reflect.apply(target, thisArg, args);
+                } catch (err) {
+                    if (attempt >= COLD_START_RETRY_DELAYS_MS.length || !isColdStartError(err)) throw err;
+                    await sleep(COLD_START_RETRY_DELAYS_MS[attempt]);
+                }
+            }
+        })();
+    },
+}) as typeof client;
 
 export default sql;

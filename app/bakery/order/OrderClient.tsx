@@ -53,6 +53,7 @@ interface BillingSummary {
     creditLimit: number;
     pendingAmount: number;
     availableCredit: number;
+    creditBalance: number;
     billingCycleDay: number | null;
     paymentTermsDays: number | null;
     orders: BillingOrder[];
@@ -143,7 +144,7 @@ export default function OrderClient({ initialProducts, initialCategories, user: 
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                             <div className="rounded-[2rem] bg-brand-olive-dark p-6 text-white">
                                 <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-white/60">Pending Amount</p>
                                 <p className="text-3xl font-serif font-black text-brand-gold-bright">{formatCurrency(billingSummary.pendingAmount)}</p>
@@ -156,6 +157,12 @@ export default function OrderClient({ initialProducts, initialCategories, user: 
                                 <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-gray-400">Credit Limit</p>
                                 <p className="text-3xl font-serif font-black">{formatCurrency(billingSummary.creditLimit)}</p>
                             </div>
+                            {billingSummary.creditBalance > 0 && (
+                                <div className="rounded-[2rem] bg-brand-soft-gray p-6 text-brand-olive-dark">
+                                    <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-gray-400">Credit Balance</p>
+                                    <p className="text-3xl font-serif font-black">{formatCurrency(billingSummary.creditBalance)}</p>
+                                </div>
+                            )}
                         </div>
 
                         <div className="mt-8 rounded-[1.5rem] sm:rounded-[2rem] border border-brand-olive-dark/10 bg-brand-soft-gray/40 p-4 sm:p-6">

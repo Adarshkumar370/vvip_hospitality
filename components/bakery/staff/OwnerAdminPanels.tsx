@@ -3,32 +3,27 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-    ShieldCheck,
-    Database,
-    Users,
+    Users2,
     Activity,
-    RefreshCw,
     AlertCircle,
     CheckCircle2,
     Loader2,
-    LayoutDashboard,
     ShoppingBag,
-    Users2,
-    Settings,
     Plus,
     Trash2,
     Camera,
-    ChevronRight,
+    Settings,
     X,
     Pencil,
-    User as UserIcon
+    RefreshCw,
+    User as UserIcon,
+    Wallet,
+    History,
 } from "lucide-react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { RupeeAmount, RupeeIcon } from "@/components/ui/RupeeAmount";
-import { formatOrderDisplayLabel } from "@/lib/order-display";
 import {
-    getHealthStatus,
     getProducts,
     addProduct,
     deleteProduct,
@@ -43,18 +38,15 @@ import {
     updateStaff,
     deleteStaff,
     setStaffStatus,
-    getOrders,
-    updateOrderStatus,
-    logoutAdmin,
     getUsers,
     getUserPrices,
     setUserPrice,
     updateUserBillingSettings,
-    getOrderFeedbackTickets,
-    updateOrderFeedbackStatus
+    recordManualPayment,
+    getManualPaymentRecords,
+    updateManualPaymentRecord,
+    getManualPaymentRecordHistory,
 } from "@/app/bakery/actions";
-
-type AdminSection = "dashboard" | "categories" | "products" | "staff" | "orders" | "users" | "pricing" | "issues";
 
 // ---------------------------------------------------------------------------
 // Shared types
@@ -86,88 +78,6 @@ interface StaffMember {
     created_at?: string;
 }
 
-interface OrderItem {
-    id: string | number;
-    product_id: string | number;
-    quantity: number;
-    price_at_time: number;
-    product_name: string;
-    product_image: string;
-}
-
-interface Order {
-    id: string | number;
-    order_number?: string;
-    status: string;
-    total_price: number;
-    created_at: string;
-    user_name: string;
-    user_phone: string;
-    items: OrderItem[];
-}
-
-type OrderFeedbackStatus = "open" | "in_review" | "resolved" | "closed";
-
-interface OrderFeedbackImage {
-    url: string;
-    key?: string;
-    name?: string;
-}
-
-interface OrderFeedbackTicket {
-    id: string;
-    order_id: string;
-    issue_type: string;
-    description: string;
-    image_urls: (OrderFeedbackImage | string)[];
-    status: OrderFeedbackStatus;
-    created_at: string;
-    updated_at: string;
-    order_number?: string;
-    order_status: string;
-    total_price: number;
-    user_name: string;
-    user_email?: string;
-    user_phone?: string;
-}
-
-const FEEDBACK_TICKETS_PER_PAGE = 20;
-const ISSUE_STATUS_OPTIONS: { value: OrderFeedbackStatus; label: string }[] = [
-    { value: "open", label: "Open" },
-    { value: "in_review", label: "In Review" },
-    { value: "resolved", label: "Resolved" },
-    { value: "closed", label: "Closed" },
-];
-
-type HealthData = {
-    database?: {
-        connected: boolean;
-        latency?: string;
-        userCount?: number;
-    };
-} | null;
-
-interface SidebarLinkProps {
-    icon: React.ReactNode;
-    label: string;
-    active: boolean;
-    onClick: () => void;
-}
-
-interface DashboardStatProps {
-    icon: React.ReactNode;
-    label: string;
-    value: string | number;
-    subtext: string;
-    status: "success" | "error" | "info";
-}
-
-interface HealthItemProps {
-    label: string;
-    status: boolean | undefined;
-    detail: string;
-}
-
 interface EditProductModalProps {
     product: Product;
     categories: Category[];
@@ -190,104 +100,22 @@ interface EditCategoryModalProps {
     isSubmitting: boolean;
 }
 
-export default function AdminPageClient() {
-    const [activeSection, setActiveSection] = useState<AdminSection>("dashboard");
-
-    return (
-        <div className="min-h-screen bg-brand-soft-gray flex overflow-hidden">
-            {/* Sidebar */}
-            <aside className="w-80 bg-white border-r border-brand-olive-dark/5 flex flex-col h-screen fixed left-0 top-0 overflow-y-auto z-20 shadow-sm">
-                <div className="p-8 pb-12">
-                    <div className="flex items-center gap-3 mb-10">
-                        <div className="w-10 h-10 bg-brand-olive-dark rounded-xl flex items-center justify-center text-brand-gold-bright shadow-lg">
-                            <ShieldCheck size={20} />
-                        </div>
-                        <span className="font-serif font-black text-xl text-brand-olive-dark tracking-tight">Bakery Admin</span>
-                    </div>
-
-                    <nav className="space-y-4">
-                        <SidebarLink
-                            icon={<LayoutDashboard />}
-                            label="Dashboard"
-                            active={activeSection === "dashboard"}
-                            onClick={() => setActiveSection("dashboard")}
-                        />
-                        <SidebarLink
-                            icon={<ShoppingBag />}
-                            label="Orders"
-                            active={activeSection === "orders"}
-                            onClick={() => setActiveSection("orders")}
-                        />
-                        <SidebarLink
-                            icon={<AlertCircle />}
-                            label="User Issues"
-                            active={activeSection === "issues"}
-                            onClick={() => setActiveSection("issues")}
-                        />
-                        <SidebarLink
-                            icon={<Settings />}
-                            label="Categories"
-                            active={activeSection === "categories"}
-                            onClick={() => setActiveSection("categories")}
-                        />
-                        <SidebarLink
-                            icon={<Database />}
-                            label="Products"
-                            active={activeSection === "products"}
-                            onClick={() => setActiveSection("products")}
-                        />
-                        <SidebarLink
-                            icon={<Users />}
-                            label="Staff"
-                            active={activeSection === "staff"}
-                            onClick={() => setActiveSection("staff")}
-                        />
-                        <SidebarLink
-                            icon={<Users2 />}
-                            label="Users"
-                            active={activeSection === "users"}
-                            onClick={() => setActiveSection("users")}
-                        />
-                        <SidebarLink
-                            icon={<Activity />}
-                            label="Pricing"
-                            active={activeSection === "pricing"}
-                            onClick={() => setActiveSection("pricing")}
-                        />
-                    </nav>
-                </div>
-
-                <div className="mt-auto p-8 border-t border-brand-olive-dark/5">
-                    <form action={logoutAdmin}>
-                        <button
-                            type="submit"
-                            className="w-full flex items-center gap-3 text-gray-400 hover:text-red-500 font-black uppercase tracking-widest text-xs transition-colors"
-                        >
-                            Sign Out
-                            <ChevronRight size={14} />
-                        </button>
-                    </form>
-                </div>
-            </aside>
-
-            {/* Main Content */}
-            <main className="flex-1 ml-80 p-12 overflow-y-auto h-screen">
-                <AnimatePresence mode="wait">
-                    {activeSection === "dashboard" && <DashboardView key="dashboard" />}
-                    {activeSection === "orders" && <OrdersView key="orders" />}
-                    {activeSection === "issues" && <AdminUserIssuesView key="issues" />}
-                    {activeSection === "categories" && <CategoriesView key="categories" />}
-                    {activeSection === "products" && <ProductsView key="products" />}
-                    {activeSection === "staff" && <StaffView key="staff" />}
-                    {activeSection === "users" && <UsersView key="users" />}
-                    {activeSection === "pricing" && <PricingView key="pricing" />}
-                </AnimatePresence>
-            </main>
-        </div>
-    );
+interface EditStaffModalProps {
+    staff: StaffMember;
+    onClose: () => void;
+    onSave: (data: { name: string, email: string, phone: string, role: string, password: string }) => void;
+    isSubmitting: boolean;
 }
 
-function UsersView() {
+interface ConfirmDeleteModalProps {
+    isOpen: boolean;
+    message: string;
+    isLoading: boolean;
+    onConfirm: () => void;
+    onCancel: () => void;
+}
+
+export function UsersView() {
     const [users, setUsers] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [editingUserId, setEditingUserId] = useState<string | number | null>(null);
@@ -565,7 +393,8 @@ function UsersView() {
         </motion.div>
     );
 }
-function PricingView() {
+
+export function PricingView() {
     const [users, setUsers] = useState<any[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
     const [selectedUser, setSelectedUser] = useState<any>(null);
@@ -786,102 +615,7 @@ function PricingView() {
     );
 }
 
-function SidebarLink({ icon, label, active, onClick }: SidebarLinkProps) {
-    return (
-        <button
-            onClick={onClick}
-            className={cn(
-                "w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-black uppercase tracking-[0.1em] text-xs transition-all",
-                active
-                    ? "bg-brand-olive-dark text-white shadow-xl"
-                    : "text-gray-400 hover:bg-brand-soft-gray hover:text-brand-olive-dark"
-            )}
-        >
-            <span className={cn(active ? "text-brand-gold-bright" : "text-gray-300")}>
-                {icon}
-            </span>
-            {label}
-        </button>
-    );
-}
-
-function DashboardView() {
-    const [healthData, setHealthData] = useState<HealthData>(null);
-    const [isRefreshing, setIsRefreshing] = useState(false);
-
-    useEffect(() => {
-        fetchHealth();
-    }, []);
-
-    const fetchHealth = async () => {
-        setIsRefreshing(true);
-        const data = await getHealthStatus();
-        setHealthData(data);
-        setIsRefreshing(false);
-    };
-
-    return (
-        <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="space-y-12"
-        >
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-                <div>
-                    <div className="flex items-center gap-3 text-brand-gold-bright font-black uppercase tracking-[0.2em] text-xs mb-3">
-                        <Activity size={16} />
-                        System Health
-                    </div>
-                    <h1 className="text-5xl font-serif font-black text-brand-olive-dark tracking-tighter">Healthy & Active</h1>
-                </div>
-                <button
-                    onClick={fetchHealth}
-                    disabled={isRefreshing}
-                    className="flex items-center gap-3 px-8 py-4 bg-white border border-brand-olive-dark/10 rounded-2xl font-black text-brand-olive-dark hover:bg-brand-olive-dark hover:text-white transition-all shadow-sm active:scale-95 group"
-                >
-                    <RefreshCw size={20} className={cn("text-brand-gold-bright transition-colors", isRefreshing && "animate-spin")} />
-                    Refresh Status
-                </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <DashboardStat
-                    icon={<Database />}
-                    label="DB Connectivity"
-                    value={healthData?.database?.connected ? "Connected" : "Offline"}
-                    subtext={healthData?.database?.latency || "N/A"}
-                    status={healthData?.database?.connected ? "success" : "error"}
-                />
-                <DashboardStat
-                    icon={<Users />}
-                    label="Total Users"
-                    value={healthData?.database?.userCount || "0"}
-                    subtext="Registered Users"
-                    status="info"
-                />
-                <DashboardStat
-                    icon={<Activity />}
-                    label="API Status"
-                    value="Operational"
-                    subtext="Ready for Orders"
-                    status="success"
-                />
-            </div>
-
-            <div className="bg-white rounded-[2.5rem] shadow-premium p-10 overflow-hidden border border-white/20">
-                <h3 className="text-2xl font-serif font-black text-brand-olive-dark mb-8">System Check Report</h3>
-                <div className="space-y-4">
-                    <HealthItem label="PostgreSQL Pool" status={healthData?.database?.connected} detail="AWS-1 AP-SOUTH-1 Pooler Active" />
-                    <HealthItem label="2Factor API" status={true} detail="Endpoint Reachable" />
-                    <HealthItem label="Auth Context" status={true} detail="LocalStorage Sync Active" />
-                </div>
-            </div>
-        </motion.div>
-    );
-}
-
-function ProductsView() {
+export function ProductsView() {
     const [products, setProducts] = useState<Product[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -1005,9 +739,9 @@ function ProductsView() {
                 ) : (
                     <div className="space-y-4">
                         {products.map((product) => (
-                            <ProductRow 
-                                key={product.id} 
-                                product={product} 
+                            <ProductRow
+                                key={product.id}
+                                product={product}
                                 onEdit={() => setEditingProduct(product)}
                                 onDelete={() => setDeletingId(product.id)}
                                 onLimitUpdate={(limit) => handleLimitUpdate(product, limit)}
@@ -1020,7 +754,7 @@ function ProductsView() {
 
             <AnimatePresence>
                 {isAddModalOpen && (
-                    <AddProductModal 
+                    <AddProductModal
                         categories={categories}
                         onClose={() => setIsAddModalOpen(false)}
                         onAdd={handleAdd}
@@ -1048,7 +782,7 @@ function ProductsView() {
     );
 }
 
-function CategoriesView() {
+export function CategoriesView() {
     const [categories, setCategories] = useState<Category[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -1202,7 +936,7 @@ function CategoriesView() {
     );
 }
 
-function StaffView() {
+export function StaffView() {
     const [staff, setStaff] = useState<StaffMember[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -1474,11 +1208,580 @@ function StaffView() {
     );
 }
 
-interface EditStaffModalProps {
-    staff: StaffMember;
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+    cash: "Cash",
+    upi: "UPI",
+    bank_transfer: "Bank Transfer",
+    card: "Card",
+    net_banking: "Net Banking",
+    wallet: "Wallet",
+};
+
+const PAYMENT_RECORD_FILTER_DAYS = [7, 30, 90, 0] as const;
+
+interface PaymentRecord {
+    id: string;
+    amount: number;
+    currencyCode: string;
+    paymentMethod: string;
+    notes: string | null;
+    paymentDate: string;
+    createdAt: string;
+    userName: string;
+    userPhone: string;
+    userEmail: string;
+    recordedByName: string;
+    recordedByRole: string;
+}
+
+interface RegisteredUser {
+    id: string | number;
+    name: string;
+    phone: string;
+    email: string;
+}
+
+interface PaymentRecordHistoryEntry {
+    id: string;
+    action: "created" | "updated";
+    amount: number;
+    currencyCode: string;
+    paymentMethod: string;
+    paymentDate: string;
+    notes: string | null;
+    createdAt: string;
+    changedByName: string;
+    changedByRole: string;
+}
+
+export function PaymentRecordsView({ staffRole }: { staffRole?: string }) {
+    const canEdit = staffRole === "admin";
+    const [records, setRecords] = useState<PaymentRecord[]>([]);
+    const [registeredUsers, setRegisteredUsers] = useState<RegisteredUser[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isLoadingUsers, setIsLoadingUsers] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [formError, setFormError] = useState("");
+    const [justSaved, setJustSaved] = useState(false);
+    const [filterDays, setFilterDays] = useState<number>(30);
+    const [userSearch, setUserSearch] = useState("");
+    const [selectedUser, setSelectedUser] = useState<RegisteredUser | null>(null);
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const [newRecord, setNewRecord] = useState({
+        amount: "",
+        paymentMethod: "cash",
+        notes: "",
+        paymentDate: todayIso,
+    });
+    const [editingRecord, setEditingRecord] = useState<PaymentRecord | null>(null);
+    const [isSavingEdit, setIsSavingEdit] = useState(false);
+    const [editError, setEditError] = useState("");
+    const [historyRecordId, setHistoryRecordId] = useState<string | null>(null);
+    const [historyEntries, setHistoryEntries] = useState<PaymentRecordHistoryEntry[]>([]);
+    const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+
+    useEffect(() => {
+        loadRecords();
+        loadUsers();
+    }, []);
+
+    const loadRecords = async () => {
+        const result = await getManualPaymentRecords();
+        if (result.success) setRecords((result.records || []) as PaymentRecord[]);
+        setIsLoading(false);
+    };
+
+    const loadUsers = async () => {
+        const result = await getUsers();
+        if (result.success) setRegisteredUsers((result.users || []) as RegisteredUser[]);
+        setIsLoadingUsers(false);
+    };
+
+    const filteredUsers = registeredUsers.filter((user) => {
+        const term = userSearch.trim().toLowerCase();
+        if (!term) return true;
+        return [user.name, user.phone, user.email].filter(Boolean).some((value) => value.toLowerCase().includes(term));
+    });
+
+    const handleAdd = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!selectedUser) {
+            setFormError("Select a registered user to attribute this payment to.");
+            return;
+        }
+        setFormError("");
+        setJustSaved(false);
+        setIsSubmitting(true);
+        const result = await recordManualPayment({
+            userId: String(selectedUser.id),
+            amount: newRecord.amount,
+            paymentMethod: newRecord.paymentMethod,
+            notes: newRecord.notes || undefined,
+            paymentDate: newRecord.paymentDate || undefined,
+        });
+        if (result.success) {
+            setNewRecord({ amount: "", paymentMethod: "cash", notes: "", paymentDate: todayIso });
+            setSelectedUser(null);
+            setUserSearch("");
+            setJustSaved(true);
+            loadRecords();
+        } else {
+            setFormError(result.error || "Failed to record payment");
+        }
+        setIsSubmitting(false);
+    };
+
+    const handleSaveEdit = async (updated: { amount: string; paymentMethod: string; paymentDate: string; notes: string }) => {
+        if (!editingRecord) return;
+        setEditError("");
+        setIsSavingEdit(true);
+        const result = await updateManualPaymentRecord({
+            recordId: editingRecord.id,
+            amount: updated.amount,
+            paymentMethod: updated.paymentMethod,
+            paymentDate: updated.paymentDate,
+            notes: updated.notes || undefined,
+        });
+        if (result.success) {
+            setEditingRecord(null);
+            loadRecords();
+            if (historyRecordId === editingRecord.id) loadHistory(editingRecord.id);
+        } else {
+            setEditError(result.error || "Failed to update payment record");
+        }
+        setIsSavingEdit(false);
+    };
+
+    const loadHistory = async (recordId: string) => {
+        setIsLoadingHistory(true);
+        const result = await getManualPaymentRecordHistory(recordId);
+        if (result.success) setHistoryEntries((result.history || []) as PaymentRecordHistoryEntry[]);
+        setIsLoadingHistory(false);
+    };
+
+    const toggleHistory = (recordId: string) => {
+        if (historyRecordId === recordId) {
+            setHistoryRecordId(null);
+            setHistoryEntries([]);
+            return;
+        }
+        setHistoryRecordId(recordId);
+        loadHistory(recordId);
+    };
+
+    const filteredRecords = records.filter((record) => {
+        if (filterDays === 0) return true;
+        const recordDate = new Date(record.createdAt);
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - filterDays);
+        return recordDate >= cutoff;
+    });
+
+    const totalInRange = filteredRecords.reduce((sum, record) => sum + record.amount, 0);
+
+    return (
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8 pb-20">
+            <div className="flex justify-between items-center bg-white p-8 rounded-[2.5rem] shadow-premium">
+                <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-brand-gold-bright mb-1">Finance</p>
+                    <h2 className="text-4xl font-serif font-black text-brand-olive-dark">Payment Records</h2>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="lg:col-span-1">
+                    <div className="bg-white p-8 rounded-[2.5rem] shadow-premium sticky top-10">
+                        <h3 className="text-xl font-serif font-black text-brand-olive-dark mb-6">Record a Payment</h3>
+                        <p className="text-xs text-gray-400 font-bold mb-6">
+                            Log a payment received outside the app (cash, UPI, bank transfer, etc.) for a registered user.
+                        </p>
+                        <form onSubmit={handleAdd} className="space-y-4">
+                            <div>
+                                <label className="mb-2 block pl-2 text-[10px] font-black uppercase tracking-widest text-gray-400">Registered User</label>
+                                {selectedUser ? (
+                                    <div className="flex items-center justify-between rounded-2xl border-2 border-brand-olive-dark bg-brand-olive-dark px-5 py-4 text-white">
+                                        <div className="min-w-0">
+                                            <p className="truncate text-sm font-black">{selectedUser.name}</p>
+                                            <p className="truncate text-[10px] font-bold uppercase tracking-widest text-brand-gold-bright">{selectedUser.phone || selectedUser.email}</p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setSelectedUser(null)}
+                                            className="shrink-0 p-2 text-white/70 hover:text-white"
+                                            aria-label="Change user"
+                                        >
+                                            <X size={16} />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <input
+                                            type="text"
+                                            placeholder="Search name, phone, or email"
+                                            value={userSearch}
+                                            onChange={(e) => setUserSearch(e.target.value)}
+                                            className="w-full bg-brand-soft-gray border-2 border-transparent focus:border-brand-gold-bright/30 outline-none rounded-2xl py-4 px-6 text-sm font-bold text-brand-olive-dark transition-all"
+                                        />
+                                        <div className="mt-2 max-h-48 space-y-2 overflow-y-auto rounded-2xl">
+                                            {isLoadingUsers ? (
+                                                <div className="flex justify-center py-6">
+                                                    <Loader2 className="animate-spin text-brand-gold-bright" size={22} />
+                                                </div>
+                                            ) : filteredUsers.length === 0 ? (
+                                                <div className="rounded-2xl bg-brand-soft-gray p-4 text-center text-[10px] font-black uppercase tracking-widest text-gray-400">
+                                                    No registered users found
+                                                </div>
+                                            ) : (
+                                                filteredUsers.slice(0, 20).map((user) => (
+                                                    <button
+                                                        type="button"
+                                                        key={user.id}
+                                                        onClick={() => { setSelectedUser(user); setFormError(""); }}
+                                                        className="w-full rounded-2xl border border-transparent bg-brand-soft-gray/60 p-3 text-left text-brand-olive-dark transition-all hover:border-brand-gold-bright/30"
+                                                    >
+                                                        <p className="truncate text-sm font-black">{user.name}</p>
+                                                        <p className="mt-0.5 truncate text-[10px] font-bold uppercase tracking-widest text-gray-400">{user.phone || user.email}</p>
+                                                    </button>
+                                                ))
+                                            )}
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                            <input
+                                required
+                                type="number"
+                                min="0.01"
+                                step="0.01"
+                                placeholder="Amount"
+                                value={newRecord.amount}
+                                onChange={(e) => setNewRecord({ ...newRecord, amount: e.target.value })}
+                                className="w-full bg-brand-soft-gray border-2 border-transparent focus:border-brand-gold-bright/30 outline-none rounded-2xl py-4 px-6 text-sm font-bold text-brand-olive-dark transition-all"
+                            />
+                            <select
+                                value={newRecord.paymentMethod}
+                                onChange={(e) => setNewRecord({ ...newRecord, paymentMethod: e.target.value })}
+                                className="w-full bg-brand-soft-gray border-2 border-transparent focus:border-brand-gold-bright/30 outline-none rounded-2xl py-4 px-6 text-sm font-bold text-brand-olive-dark transition-all"
+                            >
+                                {Object.entries(PAYMENT_METHOD_LABELS).map(([value, label]) => (
+                                    <option key={value} value={value}>{label}</option>
+                                ))}
+                            </select>
+                            <input
+                                required
+                                type="date"
+                                max={todayIso}
+                                value={newRecord.paymentDate}
+                                onChange={(e) => setNewRecord({ ...newRecord, paymentDate: e.target.value })}
+                                className="w-full bg-brand-soft-gray border-2 border-transparent focus:border-brand-gold-bright/30 outline-none rounded-2xl py-4 px-6 text-sm font-bold text-brand-olive-dark transition-all"
+                            />
+                            <textarea
+                                placeholder="Notes (optional)"
+                                rows={3}
+                                value={newRecord.notes}
+                                onChange={(e) => setNewRecord({ ...newRecord, notes: e.target.value })}
+                                className="w-full bg-brand-soft-gray border-2 border-transparent focus:border-brand-gold-bright/30 outline-none rounded-2xl py-4 px-6 text-sm font-bold text-brand-olive-dark transition-all resize-none"
+                            />
+
+                            {formError ? (
+                                <div className="rounded-2xl px-5 py-4 text-sm font-bold bg-red-50 text-red-600">{formError}</div>
+                            ) : null}
+                            {justSaved ? (
+                                <div className="rounded-2xl px-5 py-4 text-sm font-bold bg-green-50 text-green-700">Payment recorded.</div>
+                            ) : null}
+
+                            <button
+                                disabled={isSubmitting}
+                                className="w-full bg-brand-olive-dark text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-brand-gold-bright transition-all shadow-xl disabled:opacity-50"
+                            >
+                                {isSubmitting ? "Recording..." : "Record Payment"}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <div className="lg:col-span-2 space-y-8">
+                    <div className="flex w-fit gap-2 rounded-3xl bg-brand-soft-gray/50 p-2">
+                        {PAYMENT_RECORD_FILTER_DAYS.map((days) => (
+                            <button
+                                key={days}
+                                onClick={() => setFilterDays(days)}
+                                className={cn(
+                                    "rounded-2xl px-8 py-4 text-[10px] font-black uppercase tracking-widest transition-all",
+                                    filterDays === days
+                                        ? "bg-brand-olive-dark text-white shadow-lg"
+                                        : "text-gray-400 hover:text-brand-olive-dark"
+                                )}
+                            >
+                                {days === 0 ? "All Time" : `Last ${days} Days`}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="rounded-[2.5rem] bg-white p-8 shadow-premium">
+                        <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-gray-400">Recorded In Range</p>
+                        <h3 className="text-4xl font-serif font-black text-brand-olive-dark">
+                            <RupeeAmount value={totalInRange.toFixed(2)} />
+                        </h3>
+                        <p className="mt-1 text-xs font-bold text-gray-400">{filteredRecords.length} payment{filteredRecords.length === 1 ? "" : "s"}</p>
+                    </div>
+
+                    {isLoading ? (
+                        <div className="flex justify-center p-20"><Loader2 className="animate-spin text-brand-gold-bright" /></div>
+                    ) : filteredRecords.length === 0 ? (
+                        <div className="py-16 text-center text-gray-400 font-serif italic bg-white rounded-3xl shadow-sm border border-brand-olive-dark/5">
+                            No payment records in this range.
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            {filteredRecords.map((record) => (
+                                <div key={record.id} className="bg-white p-6 rounded-3xl shadow-sm border border-brand-olive-dark/5 hover:border-brand-gold-bright/30 transition-all">
+                                    <div className="flex items-center justify-between group">
+                                        <div className="flex items-center gap-4 min-w-0">
+                                            <div className="w-12 h-12 bg-brand-soft-gray rounded-2xl flex items-center justify-center text-brand-olive-dark shrink-0">
+                                                <Wallet size={20} />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    <h4 className="font-black text-brand-olive-dark truncate">{record.userName}</h4>
+                                                    <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full shrink-0 bg-brand-soft-gray text-brand-olive-dark">
+                                                        {PAYMENT_METHOD_LABELS[record.paymentMethod] || record.paymentMethod}
+                                                    </span>
+                                                </div>
+                                                <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                                                    <span>{new Date(record.paymentDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span>
+                                                    <span aria-hidden="true">-</span>
+                                                    <span>Recorded by {record.recordedByName} ({record.recordedByRole})</span>
+                                                    {record.userPhone ? (
+                                                        <>
+                                                            <span aria-hidden="true">-</span>
+                                                            <span>{record.userPhone}</span>
+                                                        </>
+                                                    ) : null}
+                                                </div>
+                                                {record.notes ? (
+                                                    <p className="mt-2 text-xs text-gray-500 font-medium normal-case truncate">{record.notes}</p>
+                                                ) : null}
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-4 shrink-0 pl-4">
+                                            <div className="flex items-center gap-1">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => toggleHistory(record.id)}
+                                                    className={cn(
+                                                        "p-2 rounded-xl transition-colors",
+                                                        historyRecordId === record.id ? "bg-brand-soft-gray text-brand-olive-dark" : "text-gray-400 hover:text-brand-olive-dark hover:bg-brand-soft-gray"
+                                                    )}
+                                                    aria-label="View history"
+                                                    title="View history"
+                                                >
+                                                    <History size={16} />
+                                                </button>
+                                                {canEdit && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => { setEditError(""); setEditingRecord(record); }}
+                                                        className="p-2 rounded-xl text-gray-400 hover:text-brand-gold-bright hover:bg-brand-soft-gray transition-colors"
+                                                        aria-label="Edit payment"
+                                                        title="Edit payment"
+                                                    >
+                                                        <Pencil size={16} />
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <div className="text-lg font-serif font-black text-brand-olive-dark">
+                                                <RupeeAmount value={record.amount.toFixed(2)} />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <AnimatePresence>
+                                        {historyRecordId === record.id && (
+                                            <motion.div
+                                                initial={{ opacity: 0, height: 0 }}
+                                                animate={{ opacity: 1, height: "auto" }}
+                                                exit={{ opacity: 0, height: 0 }}
+                                                className="overflow-hidden"
+                                            >
+                                                <div className="mt-4 border-t border-brand-soft-gray pt-4">
+                                                    <p className="mb-3 text-[9px] font-black uppercase tracking-widest text-gray-400">Change History</p>
+                                                    {isLoadingHistory ? (
+                                                        <div className="flex justify-center py-6"><Loader2 className="animate-spin text-brand-gold-bright" size={20} /></div>
+                                                    ) : historyEntries.length === 0 ? (
+                                                        <p className="text-xs text-gray-400 font-medium italic">No history found.</p>
+                                                    ) : (
+                                                        <div className="space-y-2">
+                                                            {historyEntries.map((entry) => (
+                                                                <div key={entry.id} className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-brand-soft-gray/50 px-4 py-3">
+                                                                    <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                                                                        <span className={cn(
+                                                                            "rounded-full px-2 py-0.5 font-black",
+                                                                            entry.action === "created" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-800"
+                                                                        )}>
+                                                                            {entry.action === "created" ? "Created" : "Edited"}
+                                                                        </span>
+                                                                        <span>{PAYMENT_METHOD_LABELS[entry.paymentMethod] || entry.paymentMethod}</span>
+                                                                        <span>{new Date(entry.paymentDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span>
+                                                                        <span>by {entry.changedByName} ({entry.changedByRole})</span>
+                                                                        <span>{new Date(entry.createdAt).toLocaleString("en-IN")}</span>
+                                                                    </div>
+                                                                    <div className="text-sm font-serif font-black text-brand-olive-dark">
+                                                                        <RupeeAmount value={entry.amount.toFixed(2)} />
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            <AnimatePresence>
+                {editingRecord && (
+                    <EditPaymentRecordModal
+                        record={editingRecord}
+                        onClose={() => setEditingRecord(null)}
+                        onSave={handleSaveEdit}
+                        isSubmitting={isSavingEdit}
+                        error={editError}
+                    />
+                )}
+            </AnimatePresence>
+        </motion.div>
+    );
+}
+
+function EditPaymentRecordModal({
+    record,
+    onClose,
+    onSave,
+    isSubmitting,
+    error,
+}: {
+    record: PaymentRecord;
     onClose: () => void;
-    onSave: (data: { name: string, email: string, phone: string, role: string, password: string }) => void;
+    onSave: (data: { amount: string; paymentMethod: string; paymentDate: string; notes: string }) => void;
     isSubmitting: boolean;
+    error: string;
+}) {
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const [data, setData] = useState({
+        amount: String(record.amount),
+        paymentMethod: record.paymentMethod,
+        paymentDate: record.paymentDate.slice(0, 10),
+        notes: record.notes || "",
+    });
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        onSave(data);
+    };
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto p-4 py-8 sm:items-center sm:p-6">
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={onClose}
+                className="fixed inset-0 bg-brand-olive-dark/60 backdrop-blur-sm"
+            />
+            <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                className="relative w-full max-w-lg bg-white rounded-[2rem] shadow-2xl border border-white/20 sm:rounded-[3rem]"
+            >
+                <div className="p-6 sm:p-10">
+                    <div className="flex items-center justify-between mb-8">
+                        <div>
+                            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-brand-gold-bright mb-1">Finance</p>
+                            <h3 className="text-3xl font-serif font-black text-brand-olive-dark">Edit Payment</h3>
+                            <p className="mt-2 text-xs font-bold text-gray-400">{record.userName} - {record.userPhone || record.userEmail}</p>
+                        </div>
+                        <button onClick={onClose} className="p-3 bg-brand-soft-gray rounded-2xl text-gray-400 hover:text-brand-olive-dark transition-colors">
+                            <X size={24} />
+                        </button>
+                    </div>
+
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-4">Amount</label>
+                            <input
+                                required
+                                type="number"
+                                min="0.01"
+                                step="0.01"
+                                value={data.amount}
+                                onChange={(e) => setData({ ...data, amount: e.target.value })}
+                                className="w-full bg-brand-soft-gray border-2 border-transparent focus:border-brand-gold-bright/30 focus:bg-white outline-none rounded-2xl py-4 px-6 text-sm font-bold text-brand-olive-dark transition-all"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-4">Payment Method</label>
+                            <select
+                                value={data.paymentMethod}
+                                onChange={(e) => setData({ ...data, paymentMethod: e.target.value })}
+                                className="w-full bg-brand-soft-gray border-2 border-transparent focus:border-brand-gold-bright/30 focus:bg-white outline-none rounded-2xl py-4 px-6 text-sm font-bold text-brand-olive-dark transition-all"
+                            >
+                                {Object.entries(PAYMENT_METHOD_LABELS).map(([value, label]) => (
+                                    <option key={value} value={value}>{label}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-4">Payment Date</label>
+                            <input
+                                required
+                                type="date"
+                                max={todayIso}
+                                value={data.paymentDate}
+                                onChange={(e) => setData({ ...data, paymentDate: e.target.value })}
+                                className="w-full bg-brand-soft-gray border-2 border-transparent focus:border-brand-gold-bright/30 focus:bg-white outline-none rounded-2xl py-4 px-6 text-sm font-bold text-brand-olive-dark transition-all"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-4">Notes</label>
+                            <textarea
+                                rows={3}
+                                value={data.notes}
+                                onChange={(e) => setData({ ...data, notes: e.target.value })}
+                                className="w-full bg-brand-soft-gray border-2 border-transparent focus:border-brand-gold-bright/30 focus:bg-white outline-none rounded-2xl py-4 px-6 text-sm font-bold text-brand-olive-dark transition-all resize-none"
+                            />
+                        </div>
+
+                        {error ? (
+                            <div className="rounded-2xl px-5 py-4 text-sm font-bold bg-red-50 text-red-600">{error}</div>
+                        ) : null}
+
+                        <div className="flex gap-4 pt-4">
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                className="flex-1 bg-brand-soft-gray text-brand-olive-dark py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-gray-200 transition-all"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                disabled={isSubmitting}
+                                className="flex-1 bg-brand-olive-dark text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-brand-gold-bright transition-all shadow-xl disabled:opacity-50"
+                            >
+                                {isSubmitting ? "Saving..." : "Save Changes"}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </motion.div>
+        </div>
+    );
 }
 
 function EditStaffModal({ staff, onClose, onSave, isSubmitting }: EditStaffModalProps) {
@@ -1496,21 +1799,21 @@ function EditStaffModal({ staff, onClose, onSave, isSubmitting }: EditStaffModal
     };
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+        <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto p-4 py-8 sm:items-center sm:p-6">
             <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 onClick={onClose}
-                className="absolute inset-0 bg-brand-olive-dark/60 backdrop-blur-sm"
+                className="fixed inset-0 bg-brand-olive-dark/60 backdrop-blur-sm"
             />
             <motion.div
                 initial={{ opacity: 0, scale: 0.95, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                className="relative w-full max-w-lg bg-white rounded-[3rem] shadow-2xl overflow-hidden border border-white/20"
+                className="relative w-full max-w-lg bg-white rounded-[2rem] shadow-2xl border border-white/20 sm:rounded-[3rem]"
             >
-                <div className="p-10">
+                <div className="p-6 sm:p-10">
                     <div className="flex items-center justify-between mb-8">
                         <div>
                             <p className="text-[10px] font-black uppercase tracking-[0.3em] text-brand-gold-bright mb-1">Human Resources</p>
@@ -1598,393 +1901,6 @@ function EditStaffModal({ staff, onClose, onSave, isSubmitting }: EditStaffModal
     );
 }
 
-function AdminUserIssuesView() {
-    const [tickets, setTickets] = useState<OrderFeedbackTicket[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [filterStatus, setFilterStatus] = useState<"active" | "closed">("active");
-    const [currentPage, setCurrentPage] = useState(1);
-    const [updatingTicketId, setUpdatingTicketId] = useState<string | null>(null);
-    const [message, setMessage] = useState("");
-
-    useEffect(() => {
-        loadTickets();
-    }, []);
-
-    const loadTickets = async () => {
-        setIsLoading(true);
-        const result = await getOrderFeedbackTickets();
-        if (result.success) {
-            setTickets((result.tickets || []) as OrderFeedbackTicket[]);
-            setMessage("");
-        } else {
-            setTickets([]);
-            setMessage(result.error || "Could not load user issues.");
-        }
-        setIsLoading(false);
-    };
-
-    const updateTicketStatus = async (ticketId: string, status: OrderFeedbackStatus) => {
-        setUpdatingTicketId(ticketId);
-        setMessage("");
-        const result = await updateOrderFeedbackStatus(ticketId, status);
-        if (result.success) {
-            await loadTickets();
-        } else {
-            setMessage(result.error || "Could not update issue status.");
-        }
-        setUpdatingTicketId(null);
-    };
-
-    const formatIssueType = (value: string) => value
-        .replace(/_/g, " ")
-        .replace(/\b\w/g, (char) => char.toUpperCase());
-
-    const activeTickets = tickets.filter((ticket) => ["open", "in_review"].includes(ticket.status));
-    const closedTickets = tickets.filter((ticket) => ["resolved", "closed"].includes(ticket.status));
-    const filteredTickets = filterStatus === "active" ? activeTickets : closedTickets;
-    const totalPages = Math.max(1, Math.ceil(filteredTickets.length / FEEDBACK_TICKETS_PER_PAGE));
-    const safeCurrentPage = Math.min(currentPage, totalPages);
-    const startIndex = (safeCurrentPage - 1) * FEEDBACK_TICKETS_PER_PAGE;
-    const paginatedTickets = filteredTickets.slice(startIndex, startIndex + FEEDBACK_TICKETS_PER_PAGE);
-
-    const imageUrlFor = (image: OrderFeedbackImage | string) => typeof image === "string" ? image : image.url;
-    const imageNameFor = (image: OrderFeedbackImage | string, index: number) => typeof image === "string" ? `Evidence ${index + 1}` : image.name || `Evidence ${index + 1}`;
-
-    return (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8 pb-20">
-            <div className="flex flex-col gap-4 rounded-[2.5rem] bg-white p-6 shadow-premium md:p-8 xl:flex-row xl:items-center xl:justify-between">
-                <div>
-                    <p className="mb-1 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.3em] text-brand-gold-bright">
-                        <AlertCircle size={16} />
-                        Order feedback
-                    </p>
-                    <h2 className="text-4xl font-serif font-black text-brand-olive-dark">User Issues</h2>
-                </div>
-
-                <div className="flex w-full rounded-xl bg-brand-soft-gray p-1 xl:w-auto">
-                    {[
-                        { id: "active", label: `Active (${activeTickets.length})` },
-                        { id: "closed", label: `Closed (${closedTickets.length})` },
-                    ].map((tab) => (
-                        <button
-                            key={tab.id}
-                            type="button"
-                            onClick={() => {
-                                setFilterStatus(tab.id as "active" | "closed");
-                                setCurrentPage(1);
-                            }}
-                            className={cn(
-                                "flex-1 rounded-lg px-5 py-2 text-[10px] font-black uppercase tracking-widest transition-all xl:flex-none",
-                                filterStatus === tab.id ? "bg-white text-brand-olive-dark shadow-sm" : "text-gray-400 hover:text-brand-olive-dark"
-                            )}
-                        >
-                            {tab.label}
-                        </button>
-                    ))}
-                </div>
-            </div>
-
-            {message && (
-                <div className="rounded-2xl border border-red-100 bg-red-50 px-5 py-4 text-sm font-bold text-red-600">
-                    {message}
-                </div>
-            )}
-
-            <div className="space-y-6">
-                {isLoading ? (
-                    <div className="flex justify-center p-20">
-                        <Loader2 className="animate-spin text-brand-gold-bright" />
-                    </div>
-                ) : paginatedTickets.length === 0 ? (
-                    <div className="rounded-[2.5rem] bg-white p-20 text-center font-bold uppercase tracking-widest text-gray-400 shadow-premium">
-                        No {filterStatus} user issues found
-                    </div>
-                ) : (
-                    <>
-                        {paginatedTickets.map((ticket) => (
-                            <div key={ticket.id} className="overflow-hidden rounded-[2rem] border border-brand-olive-dark/5 bg-white shadow-premium">
-                                <div className="flex flex-col gap-4 border-b border-brand-olive-dark/5 bg-brand-soft-gray/50 px-8 py-5 xl:flex-row xl:items-center xl:justify-between">
-                                    <div>
-                                        <div className="flex flex-wrap items-center gap-3">
-                                            <span className="font-black text-brand-olive-dark">
-                                                {formatOrderDisplayLabel({ id: ticket.order_id, order_number: ticket.order_number })}
-                                            </span>
-                                            <span className="rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-widest text-brand-gold-bright">
-                                                {formatIssueType(ticket.issue_type)}
-                                            </span>
-                                        </div>
-                                        <p className="mt-1 text-xs font-bold text-gray-400">
-                                            {new Date(ticket.created_at).toLocaleString()} - {ticket.user_name} - {ticket.user_phone || ticket.user_email || "No contact"}
-                                        </p>
-                                    </div>
-
-                                    <div className="flex flex-wrap items-center gap-3">
-                                        <span className={cn(
-                                            "rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-widest",
-                                            ["open", "in_review"].includes(ticket.status) ? "bg-orange-50 text-orange-600" : "bg-emerald-50 text-emerald-600"
-                                        )}>
-                                            {formatIssueType(ticket.status)}
-                                        </span>
-                                        <select
-                                            value={ticket.status}
-                                            disabled={updatingTicketId === ticket.id}
-                                            onChange={(event) => updateTicketStatus(ticket.id, event.target.value as OrderFeedbackStatus)}
-                                            className="rounded-xl border border-brand-olive-dark/10 bg-white px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-brand-olive-dark outline-none transition-all hover:border-brand-gold-bright focus:border-brand-gold-bright disabled:opacity-50"
-                                        >
-                                            {ISSUE_STATUS_OPTIONS.map((option) => (
-                                                <option key={option.value} value={option.value}>{option.label}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-1 gap-8 p-8 xl:grid-cols-[1fr_260px]">
-                                    <div className="space-y-5">
-                                        <div>
-                                            <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-gray-400">Issue Details</p>
-                                            <p className="whitespace-pre-wrap text-sm font-semibold leading-7 text-brand-olive-dark">{ticket.description}</p>
-                                        </div>
-
-                                        {ticket.image_urls.length > 0 && (
-                                            <div>
-                                                <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Evidence Images</p>
-                                                <div className="flex flex-wrap gap-3">
-                                                    {ticket.image_urls.slice(0, 3).map((image, index) => {
-                                                        const imageUrl = imageUrlFor(image);
-                                                        return (
-                                                            <a
-                                                                key={imageUrl}
-                                                                href={imageUrl}
-                                                                target="_blank"
-                                                                rel="noreferrer"
-                                                                className="relative h-24 w-24 overflow-hidden rounded-2xl bg-brand-soft-gray shadow-sm ring-1 ring-brand-olive-dark/5 transition-transform hover:scale-105"
-                                                            >
-                                                                <Image
-                                                                    src={imageUrl}
-                                                                    alt={imageNameFor(image, index)}
-                                                                    fill
-                                                                    sizes="96px"
-                                                                    className="object-cover"
-                                                                />
-                                                            </a>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    <div className="rounded-2xl bg-brand-soft-gray p-6">
-                                        <div className="space-y-4">
-                                            <div>
-                                                <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Order Status</p>
-                                                <p className="font-black capitalize text-brand-olive-dark">{ticket.order_status}</p>
-                                            </div>
-                                            <div className="border-t border-brand-olive-dark/10 pt-4">
-                                                <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Order Total</p>
-                                                <p className="text-2xl font-black text-brand-gold-bright"><RupeeAmount value={ticket.total_price} /></p>
-                                            </div>
-                                            <div className="border-t border-brand-olive-dark/10 pt-4">
-                                                <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-gray-400">Last Updated</p>
-                                                <p className="text-xs font-bold text-brand-olive-dark">{new Date(ticket.updated_at).toLocaleString()}</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-
-                        {totalPages > 1 && (
-                            <div className="flex items-center justify-center gap-4 pb-4 pt-8">
-                                <button
-                                    type="button"
-                                    onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-                                    disabled={safeCurrentPage === 1}
-                                    className="rounded-xl border border-brand-olive-dark/10 bg-white px-6 py-2 text-sm font-bold text-brand-olive-dark transition-all hover:bg-brand-soft-gray disabled:opacity-50"
-                                >
-                                    Previous
-                                </button>
-                                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-                                    Page {safeCurrentPage} of {totalPages}
-                                </span>
-                                <button
-                                    type="button"
-                                    onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
-                                    disabled={safeCurrentPage === totalPages}
-                                    className="rounded-xl border border-brand-olive-dark/10 bg-white px-6 py-2 text-sm font-bold text-brand-olive-dark transition-all hover:bg-brand-soft-gray disabled:opacity-50"
-                                >
-                                    Next
-                                </button>
-                            </div>
-                        )}
-                    </>
-                )}
-            </div>
-        </motion.div>
-    );
-}
-
-function OrdersView() {
-    const [orders, setOrders] = useState<Order[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [filterStatus, setFilterStatus] = useState<"all" | "pending" | "ongoing" | "completed">("all");
-    const [currentPage, setCurrentPage] = useState(1);
-    const ITEMS_PER_PAGE = 50;
-
-    useEffect(() => {
-        loadOrders();
-    }, []);
-
-    const loadOrders = async () => {
-        const result = await getOrders();
-        if (result.success) setOrders((result.orders || []) as unknown as Order[]);
-        setIsLoading(false);
-    };
-
-    const handleStatusUpdate = async (id: string | number, status: string) => {
-        const result = await updateOrderStatus(id, status);
-        if (result.success) loadOrders();
-    };
-
-    return (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8 pb-20">
-            <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center bg-white p-6 md:p-8 rounded-[2.5rem] shadow-premium gap-4">
-                <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-brand-gold-bright mb-1">Live fulfillment</p>
-                    <h2 className="text-4xl font-serif font-black text-brand-olive-dark">Order Queue</h2>
-                </div>
-                <div className="flex bg-brand-soft-gray p-1 rounded-xl w-full xl:w-auto overflow-x-auto no-scrollbar">
-                    {[
-                        { id: "all", label: "All Orders" },
-                        { id: "pending", label: "Payment Pending" },
-                        { id: "ongoing", label: "Ongoing" },
-                        { id: "completed", label: "Completed" }
-                    ].map((tab) => (
-                        <button
-                            key={tab.id}
-                            onClick={() => {
-                                setFilterStatus(tab.id as any);
-                                setCurrentPage(1); // Reset page on filter change
-                            }}
-                            className={cn(
-                                "flex-1 xl:flex-none py-2 px-4 rounded-lg text-[10px] md:text-sm font-black uppercase tracking-widest transition-all whitespace-nowrap",
-                                filterStatus === tab.id ? "bg-white text-brand-olive-dark shadow-sm" : "text-gray-400 hover:text-brand-olive-dark"
-                            )}
-                        >
-                            {tab.label}
-                        </button>
-                    ))}
-                </div>
-            </div>
-
-            <div className="space-y-6">
-                {isLoading ? (
-                    <div className="flex justify-center p-20"><Loader2 className="animate-spin text-brand-gold-bright" /></div>
-                ) : (() => {
-                    const filteredOrders = orders.filter((order: any) => {
-                        if (filterStatus === "all") return true;
-                        if (filterStatus === "pending") return order.payment_status === "pending";
-                        if (filterStatus === "ongoing") return order.payment_status === "paid" && order.status !== "delivered" && order.status !== "cancelled";
-                        if (filterStatus === "completed") return order.status === "delivered" || order.status === "cancelled";
-                        return true;
-                    });
-
-                    if (filteredOrders.length === 0) {
-                        return <div className="text-center py-20 text-gray-400 font-bold uppercase tracking-widest">No orders found</div>;
-                    }
-
-                    const totalPages = Math.ceil(filteredOrders.length / ITEMS_PER_PAGE);
-                    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-                    const paginatedOrders = filteredOrders.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-
-                    return (
-                        <>
-                            {paginatedOrders.map((order: any) => (
-                                <div key={order.id} className="bg-white rounded-[2rem] shadow-premium overflow-hidden border border-brand-olive-dark/5">
-                                    <div className="bg-brand-soft-gray/50 px-8 py-4 border-b border-brand-olive-dark/5 flex justify-between items-center">
-                                        <div className="flex items-center gap-6">
-                                            <span className="text-brand-olive-dark font-black">{formatOrderDisplayLabel(order)}</span>
-                                            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">{new Date(order.created_at).toLocaleString()}</span>
-                                        </div>
-                                        <div className="flex flex-wrap items-center gap-2 md:gap-4 mt-4 md:mt-0">
-                                            <span className={cn(
-                                                "px-3 md:px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm",
-                                                order.payment_status === 'paid' ? "bg-green-50 text-green-600 border border-green-200" : "bg-orange-50 text-orange-600 border border-orange-200"
-                                            )}>
-                                                Payment: {order.payment_status || "Pending"}
-                                            </span>
-                                            <select
-                                                value={order.status}
-                                                onChange={(e) => handleStatusUpdate(order.id, e.target.value)}
-                                                className="bg-white border border-brand-olive-dark/10 rounded-xl px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest outline-none focus:border-brand-gold-bright shadow-sm hover:border-brand-gold-bright transition-all cursor-pointer"
-                                            >
-                                                <option value="pending">Pending</option>
-                                                <option value="preparing">Preparing</option>
-                                                <option value="prepared">Prepared</option>
-                                                <option value="in transit">In Transit</option>
-                                                <option value="delivered">Delivered</option>
-                                                <option value="cancelled">Cancelled</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                    <div className="p-8 grid grid-cols-1 md:grid-cols-3 gap-8">
-                                        <div className="md:col-span-2 space-y-4">
-                                            {order.items.map((item: any) => (
-                                                <div key={item.id} className="flex items-center gap-4">
-                                                    <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-brand-soft-gray">
-                                                        <Image src={item.product_image} alt={item.product_name} fill className="object-cover" />
-                                                    </div>
-                                                    <div className="flex-1">
-                                                        <p className="font-black text-brand-olive-dark text-sm">{item.product_name}</p>
-                                                        <p className="flex items-center gap-1 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Qty: {item.quantity} x <RupeeAmount value={item.price_at_time} /></p>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                        <div className="bg-brand-soft-gray p-6 rounded-2xl space-y-4">
-                                            <div>
-                                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Customer</p>
-                                                <p className="font-black text-brand-olive-dark">{order.user_name}</p>
-                                                <p className="text-xs text-gray-500">{order.user_phone}</p>
-                                            </div>
-                                            <div className="pt-4 border-t border-brand-olive-dark/10">
-                                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Total Amount</p>
-                                                <p className="text-2xl font-black text-brand-gold-bright"><RupeeAmount value={order.total_price} /></p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-
-                            {totalPages > 1 && (
-                                <div className="flex justify-center items-center gap-4 pt-8 pb-4">
-                                    <button
-                                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                                        disabled={currentPage === 1}
-                                        className="px-6 py-2 rounded-xl bg-white border border-brand-olive-dark/10 font-bold text-brand-olive-dark hover:bg-brand-soft-gray disabled:opacity-50 transition-all text-sm"
-                                    >
-                                        Previous
-                                    </button>
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-                                        Page {currentPage} of {totalPages}
-                                    </span>
-                                    <button
-                                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                                        disabled={currentPage === totalPages}
-                                        className="px-6 py-2 rounded-xl bg-white border border-brand-olive-dark/10 font-bold text-brand-olive-dark hover:bg-brand-soft-gray disabled:opacity-50 transition-all text-sm"
-                                    >
-                                        Next
-                                    </button>
-                                </div>
-                            )}
-                        </>
-                    );
-                })()}
-            </div>
-        </motion.div>
-    );
-}
-
 function EditProductModal({ product, categories, onClose, onSave, isSubmitting }: EditProductModalProps) {
     const [data, setData] = useState({
         name: product.name,
@@ -2020,21 +1936,21 @@ function EditProductModal({ product, categories, onClose, onSave, isSubmitting }
     };
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+        <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto p-4 py-8 sm:items-center sm:p-6">
             <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 onClick={onClose}
-                className="absolute inset-0 bg-brand-olive-dark/60 backdrop-blur-sm"
+                className="fixed inset-0 bg-brand-olive-dark/60 backdrop-blur-sm"
             />
             <motion.div
                 initial={{ opacity: 0, scale: 0.95, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                className="relative w-full max-w-2xl bg-white rounded-[3rem] shadow-2xl overflow-hidden border border-white/20"
+                className="relative w-full max-w-2xl bg-white rounded-[2rem] shadow-2xl border border-white/20 sm:rounded-[3rem]"
             >
-                <div className="p-10">
+                <div className="p-6 sm:p-10">
                     <div className="flex items-center justify-between mb-8">
                         <div>
                             <p className="text-[10px] font-black uppercase tracking-[0.3em] text-brand-gold-bright mb-1">Catalog Update</p>
@@ -2046,7 +1962,7 @@ function EditProductModal({ product, categories, onClose, onSave, isSubmitting }
                     </div>
 
                     <form onSubmit={handleSubmit} className="space-y-6">
-                        <div className="grid grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                             <div className="space-y-2 col-span-2">
                                 <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-4">Product Name</label>
                                 <input
@@ -2199,21 +2115,21 @@ function AddProductModal({ categories, onClose, onAdd, isSubmitting }: AddProduc
     };
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+        <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto p-4 py-8 sm:items-center sm:p-6">
             <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 onClick={onClose}
-                className="absolute inset-0 bg-brand-olive-dark/60 backdrop-blur-sm"
+                className="fixed inset-0 bg-brand-olive-dark/60 backdrop-blur-sm"
             />
             <motion.div
                 initial={{ opacity: 0, scale: 0.95, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                className="relative w-full max-w-2xl bg-white rounded-[3rem] shadow-2xl overflow-hidden border border-white/20"
+                className="relative w-full max-w-2xl bg-white rounded-[2rem] shadow-2xl border border-white/20 sm:rounded-[3rem]"
             >
-                <div className="p-10">
+                <div className="p-6 sm:p-10">
                     <div className="flex items-center justify-between mb-8">
                         <div>
                             <p className="text-[10px] font-black uppercase tracking-[0.3em] text-brand-gold-bright mb-1">New Arrival</p>
@@ -2225,7 +2141,7 @@ function AddProductModal({ categories, onClose, onAdd, isSubmitting }: AddProduc
                     </div>
 
                     <form onSubmit={handleSubmit} className="space-y-6">
-                        <div className="grid grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                             <div className="space-y-2 col-span-2">
                                 <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-4">Product Name</label>
                                 <input
@@ -2346,10 +2262,10 @@ function AddProductModal({ categories, onClose, onAdd, isSubmitting }: AddProduc
     );
 }
 
-function ProductRow({ product, onEdit, onDelete, onLimitUpdate, isUpdating }: { 
-    product: Product; 
-    onEdit: () => void; 
-    onDelete: () => void; 
+function ProductRow({ product, onEdit, onDelete, onLimitUpdate, isUpdating }: {
+    product: Product;
+    onEdit: () => void;
+    onDelete: () => void;
     onLimitUpdate: (limit: number) => void;
     isUpdating: boolean;
 }) {
@@ -2373,11 +2289,11 @@ function ProductRow({ product, onEdit, onDelete, onLimitUpdate, isUpdating }: {
                 </div>
             </div>
 
-            <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
+            <div className="flex flex-wrap items-center justify-center gap-4 w-full md:w-auto md:justify-end">
                 {/* Inline Limit Edit */}
-                <div className="w-[200px] flex justify-center">
+                <div className="flex justify-center">
                     <div className="flex items-center gap-3 bg-white p-2 pr-3 rounded-xl shadow-sm border border-brand-olive-dark/5">
-                        <input 
+                        <input
                             type="number"
                             value={isNaN(localLimit) ? "" : localLimit}
                             onChange={(e) => setLocalLimit(parseInt(e.target.value) || 0)}
@@ -2388,8 +2304,8 @@ function ProductRow({ product, onEdit, onDelete, onLimitUpdate, isUpdating }: {
                             disabled={!hasChanged || isUpdating}
                             className={cn(
                                 "p-2 rounded-lg transition-all",
-                                hasChanged 
-                                    ? "bg-brand-gold-bright text-brand-olive-dark hover:scale-110 shadow-md" 
+                                hasChanged
+                                    ? "bg-brand-gold-bright text-brand-olive-dark hover:scale-110 shadow-md"
                                     : "text-gray-300 pointer-events-none"
                             )}
                         >
@@ -2398,7 +2314,7 @@ function ProductRow({ product, onEdit, onDelete, onLimitUpdate, isUpdating }: {
                     </div>
                 </div>
 
-                <div className="w-[120px] flex justify-center gap-2">
+                <div className="flex justify-center gap-2">
                     <button
                         onClick={onEdit}
                         className="p-2.5 bg-white hover:bg-brand-olive-dark hover:text-white text-brand-olive-dark rounded-xl transition-all active:scale-95 shadow-sm"
@@ -2418,7 +2334,6 @@ function ProductRow({ product, onEdit, onDelete, onLimitUpdate, isUpdating }: {
         </div>
     );
 }
-
 
 function EditCategoryModal({ category, onClose, onSave, isSubmitting }: EditCategoryModalProps) {
     const [name, setName] = useState(category.name);
@@ -2490,56 +2405,9 @@ function EditCategoryModal({ category, onClose, onSave, isSubmitting }: EditCate
     );
 }
 
-function DashboardStat({ icon, label, value, subtext, status }: DashboardStatProps) {
-    return (
-        <div className="bg-white p-8 rounded-[2.5rem] shadow-md border border-brand-olive-dark/5">
-            <div className={cn(
-                "w-12 h-12 rounded-xl flex items-center justify-center mb-6",
-                status === "success" ? "bg-green-50 text-green-500" :
-                    status === "error" ? "bg-red-50 text-red-500" : "bg-blue-50 text-blue-500"
-            )}>
-                {icon}
-            </div>
-            <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">{label}</p>
-            <div className="flex flex-col gap-1">
-                <h4 className="text-2xl font-serif font-black text-brand-olive-dark">{value}</h4>
-                <p className="text-sm font-medium text-gray-400">{subtext}</p>
-            </div>
-        </div>
-    );
-}
-
-function HealthItem({ label, status, detail }: HealthItemProps) {
-    return (
-        <div className="flex items-center justify-between p-4 bg-brand-soft-gray/50 rounded-2xl">
-            <div className="flex items-center gap-4">
-                {status ? <CheckCircle2 className="text-green-500" size={20} /> : <AlertCircle className="text-red-500" size={20} />}
-                <div>
-                    <p className="text-sm font-black text-brand-olive-dark">{label}</p>
-                    <p className="text-[10px] font-medium text-gray-400">{detail}</p>
-                </div>
-            </div>
-            <span className={cn(
-                "text-[10px] font-black uppercase px-3 py-1 rounded-full",
-                status ? "bg-green-100 text-green-600" : "bg-red-100 text-red-600"
-            )}>
-                {status ? "Online" : "Fatal"}
-            </span>
-        </div>
-    );
-}
-
 // ---------------------------------------------------------------------------
 // Reusable confirm-delete modal (replaces window.confirm which browsers block)
 // ---------------------------------------------------------------------------
-interface ConfirmDeleteModalProps {
-    isOpen: boolean;
-    message: string;
-    isLoading: boolean;
-    onConfirm: () => void;
-    onCancel: () => void;
-}
-
 function ConfirmDeleteModal({ isOpen, message, isLoading, onConfirm, onCancel }: ConfirmDeleteModalProps) {
     if (!isOpen) return null;
     return (
@@ -2580,4 +2448,3 @@ function ConfirmDeleteModal({ isOpen, message, isLoading, onConfirm, onCancel }:
         </div>
     );
 }
-

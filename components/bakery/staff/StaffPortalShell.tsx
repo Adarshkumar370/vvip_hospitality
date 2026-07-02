@@ -16,18 +16,25 @@ import {
     Loader2,
     LogOut,
     MapPin,
+    Menu,
     Save,
     Package,
     Phone,
+    Settings,
     Shield,
+    ShoppingBag,
+    Terminal,
     Truck,
     User,
+    Users2,
     Wallet,
+    X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { RupeeAmount } from "@/components/ui/RupeeAmount";
 import { getAddresses, getOrderFeedbackTickets, getOrders, getProducts, getProductsForUser, getStaffSession, getUserBillingSummary, getUsers, logoutStaff, retryStaffInvoiceGeneration, staffLogin, staffPlaceOrder, updateOrderFeedbackStatus, updateOrderStatus, updateProductDailyLimitForStaff } from "@/app/bakery/actions";
 import { formatOrderDisplayNumber } from "@/lib/order-display";
+import { CategoriesView, PaymentRecordsView, PricingView, ProductsView, StaffView, UsersView } from "@/components/bakery/staff/OwnerAdminPanels";
 
 type StaffRole = "baker" | "delivery" | "manager" | "accountant" | "admin";
 type PortalKey = "baker" | "delivery-agent" | "manager" | "accountant" | "owner";
@@ -145,6 +152,7 @@ type ProductionSummaryItem = {
 const ORDERS_PER_PAGE = 50;
 const FEEDBACK_TICKETS_PER_PAGE = 20;
 const ACCOUNTANT_FILTER_DAYS = [1, 7, 30] as const;
+const STAFF_FILTER_DAYS = [1, 3, 5, 7] as const;
 const ISSUE_STATUS_OPTIONS: Array<{ value: OrderFeedbackStatus; label: string }> = [
     { value: "open", label: "Open" },
     { value: "in_review", label: "In Review" },
@@ -367,7 +375,13 @@ export function StaffRolePortal({ portalKey }: { portalKey: PortalKey }) {
     );
     const [staff, setStaff] = useState<StaffMember | null>(null);
     const [isCheckingSession, setIsCheckingSession] = useState(true);
-    const [activeSection, setActiveSection] = useState<"orders" | "limits" | "create" | "feedback">("orders");
+    const [activeSection, setActiveSectionState] = useState<"orders" | "limits" | "create" | "feedback" | "products" | "categories" | "staffmgmt" | "users" | "pricing" | "payments">("orders");
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+    const setActiveSection = (section: typeof activeSection) => {
+        setActiveSectionState(section);
+        setIsSidebarOpen(false);
+    };
 
     useEffect(() => {
         const checkSession = async () => {
@@ -405,18 +419,60 @@ export function StaffRolePortal({ portalKey }: { portalKey: PortalKey }) {
         );
     }
 
+    const portalIcon = portal.key === "delivery-agent" ? <Truck size={24} /> : portal.key === "accountant" ? <Wallet size={24} /> : portal.key === "owner" ? <Shield size={24} /> : <ChefHat size={24} />;
+
     return (
-        <div className="min-h-screen bg-brand-soft-gray flex">
-            <aside className="sticky top-0 flex h-screen w-72 flex-col border-r border-brand-olive-dark/5 bg-white shadow-premium">
+        <div className="min-h-screen bg-brand-soft-gray lg:flex">
+            <div className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-brand-olive-dark/5 bg-white px-5 py-4 shadow-sm lg:hidden">
+                <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-olive-dark text-brand-gold-bright shadow-lg">
+                        {portalIcon}
+                    </div>
+                    <div>
+                        <p className="text-[9px] font-black uppercase tracking-[0.28em] text-brand-gold-bright">VVIP Staff</p>
+                        <h2 className="text-base font-serif font-black leading-none text-brand-olive-dark">{portal.label} Portal</h2>
+                    </div>
+                </div>
+                <button
+                    onClick={() => setIsSidebarOpen(true)}
+                    aria-label="Open menu"
+                    className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-soft-gray text-brand-olive-dark transition-all hover:bg-brand-olive-dark hover:text-white"
+                >
+                    <Menu size={20} />
+                </button>
+            </div>
+
+            {isSidebarOpen ? (
+                <div
+                    className="fixed inset-0 z-40 bg-brand-olive-dark/50 backdrop-blur-sm lg:hidden"
+                    onClick={() => setIsSidebarOpen(false)}
+                />
+            ) : null}
+
+            <aside
+                className={cn(
+                    "fixed inset-y-0 left-0 z-50 flex h-full w-72 max-w-[85vw] flex-col overflow-y-auto border-r border-brand-olive-dark/5 bg-white shadow-premium transition-transform duration-300 ease-in-out lg:sticky lg:top-0 lg:z-auto lg:h-screen lg:max-w-none lg:translate-x-0 lg:transition-none",
+                    isSidebarOpen ? "translate-x-0" : "-translate-x-full"
+                )}
+            >
                 <div className="p-8">
-                    <div className="mb-10 flex items-center gap-4">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-olive-dark text-brand-gold-bright shadow-lg">
-                            {portal.key === "delivery-agent" ? <Truck size={24} /> : portal.key === "accountant" ? <Wallet size={24} /> : portal.key === "owner" ? <Shield size={24} /> : <ChefHat size={24} />}
+                    <div className="mb-10 flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-olive-dark text-brand-gold-bright shadow-lg">
+                                {portalIcon}
+                            </div>
+                            <div>
+                                <p className="mb-1 text-[10px] font-black uppercase tracking-[0.3em] text-brand-gold-bright">VVIP Staff</p>
+                                <h2 className="text-xl font-serif font-black leading-none text-brand-olive-dark">{portal.label} Portal</h2>
+                            </div>
                         </div>
-                        <div>
-                            <p className="mb-1 text-[10px] font-black uppercase tracking-[0.3em] text-brand-gold-bright">VVIP Staff</p>
-                            <h2 className="text-xl font-serif font-black leading-none text-brand-olive-dark">{portal.label} Portal</h2>
-                        </div>
+                        <button
+                            onClick={() => setIsSidebarOpen(false)}
+                            aria-label="Close menu"
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-soft-gray text-gray-400 transition-all hover:text-brand-olive-dark lg:hidden"
+                        >
+                            <X size={18} />
+                        </button>
                     </div>
 
                     <div className="mb-8 rounded-2xl bg-brand-soft-gray/50 p-4">
@@ -434,6 +490,7 @@ export function StaffRolePortal({ portalKey }: { portalKey: PortalKey }) {
                                 <Link
                                     key={item.key}
                                     href={item.route}
+                                    onClick={() => setIsSidebarOpen(false)}
                                     className={cn(
                                         "flex items-center gap-3 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-widest transition-all",
                                         isActive
@@ -503,14 +560,92 @@ export function StaffRolePortal({ portalKey }: { portalKey: PortalKey }) {
                             </button>
                         ) : null}
 
-                        {staff.role === "admin" ? (
-                            <a
-                                href="/bakery/admin"
-                                className="flex items-center gap-3 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-widest text-gray-400 transition-all hover:bg-brand-soft-gray hover:text-brand-olive-dark"
+                        {["admin", "manager", "accountant"].includes(staff.role) ? (
+                            <button
+                                onClick={() => setActiveSection("payments")}
+                                className={cn(
+                                    "flex items-center gap-3 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-widest transition-all",
+                                    activeSection === "payments"
+                                        ? "bg-brand-olive-dark text-brand-gold-bright"
+                                        : "text-gray-400 hover:bg-brand-soft-gray hover:text-brand-olive-dark"
+                                )}
                             >
-                                <Shield size={18} />
-                                Admin Panel
-                            </a>
+                                <Wallet size={18} />
+                                Payment Records
+                            </button>
+                        ) : null}
+
+                        {staff.role === "admin" ? (
+                            <>
+                                <button
+                                    onClick={() => setActiveSection("products")}
+                                    className={cn(
+                                        "flex items-center gap-3 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-widest transition-all",
+                                        activeSection === "products"
+                                            ? "bg-brand-olive-dark text-brand-gold-bright"
+                                            : "text-gray-400 hover:bg-brand-soft-gray hover:text-brand-olive-dark"
+                                    )}
+                                >
+                                    <ShoppingBag size={18} />
+                                    Products
+                                </button>
+                                <button
+                                    onClick={() => setActiveSection("categories")}
+                                    className={cn(
+                                        "flex items-center gap-3 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-widest transition-all",
+                                        activeSection === "categories"
+                                            ? "bg-brand-olive-dark text-brand-gold-bright"
+                                            : "text-gray-400 hover:bg-brand-soft-gray hover:text-brand-olive-dark"
+                                    )}
+                                >
+                                    <Settings size={18} />
+                                    Categories
+                                </button>
+                                <button
+                                    onClick={() => setActiveSection("staffmgmt")}
+                                    className={cn(
+                                        "flex items-center gap-3 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-widest transition-all",
+                                        activeSection === "staffmgmt"
+                                            ? "bg-brand-olive-dark text-brand-gold-bright"
+                                            : "text-gray-400 hover:bg-brand-soft-gray hover:text-brand-olive-dark"
+                                    )}
+                                >
+                                    <Users2 size={18} />
+                                    Staff
+                                </button>
+                                <button
+                                    onClick={() => setActiveSection("users")}
+                                    className={cn(
+                                        "flex items-center gap-3 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-widest transition-all",
+                                        activeSection === "users"
+                                            ? "bg-brand-olive-dark text-brand-gold-bright"
+                                            : "text-gray-400 hover:bg-brand-soft-gray hover:text-brand-olive-dark"
+                                    )}
+                                >
+                                    <User size={18} />
+                                    Users
+                                </button>
+                                <button
+                                    onClick={() => setActiveSection("pricing")}
+                                    className={cn(
+                                        "flex items-center gap-3 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-widest transition-all",
+                                        activeSection === "pricing"
+                                            ? "bg-brand-olive-dark text-brand-gold-bright"
+                                            : "text-gray-400 hover:bg-brand-soft-gray hover:text-brand-olive-dark"
+                                    )}
+                                >
+                                    <Wallet size={18} />
+                                    Pricing
+                                </button>
+                                <a
+                                    href="/bakery/developer"
+                                    onClick={() => setIsSidebarOpen(false)}
+                                    className="flex items-center gap-3 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-widest text-gray-400 transition-all hover:bg-brand-soft-gray hover:text-brand-olive-dark"
+                                >
+                                    <Terminal size={18} />
+                                    Developer
+                                </a>
+                            </>
                         ) : null}
                     </nav>
                 </div>
@@ -526,7 +661,7 @@ export function StaffRolePortal({ portalKey }: { portalKey: PortalKey }) {
                 </div>
             </aside>
 
-            <main className="flex-1 overflow-y-auto p-8 lg:p-12">
+            <main className="w-full min-w-0 overflow-y-auto p-4 sm:p-6 lg:flex-1 lg:p-12">
                 <div className="mx-auto max-w-5xl">
                     <StaffDashboard
                         staff={staff}
@@ -546,7 +681,7 @@ function StaffDashboard({
 }: {
     staff: StaffMember;
     portalLabel: string;
-    activeSection: "orders" | "limits" | "create" | "feedback";
+    activeSection: "orders" | "limits" | "create" | "feedback" | "products" | "categories" | "staffmgmt" | "users" | "pricing" | "payments";
 }) {
     const [orders, setOrders] = useState<OrderRecord[]>([]);
     const [feedbackTickets, setFeedbackTickets] = useState<OrderFeedbackTicket[]>([]);
@@ -557,11 +692,13 @@ function StaffDashboard({
     const [activeTab, setActiveTab] = useState<"pending" | "active" | "completed">("pending");
     const [currentPage, setCurrentPage] = useState(1);
     const [accountantFilterDays, setAccountantFilterDays] = useState<1 | 7 | 30>(1);
+    const [staffFilterDays, setStaffFilterDays] = useState<1 | 3 | 5 | 7>(1);
     const [actionMessage, setActionMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
     const [activeOrderActionId, setActiveOrderActionId] = useState<string | null>(null);
     const [activeFeedbackTicketId, setActiveFeedbackTicketId] = useState<string | null>(null);
     const [productLimitDrafts, setProductLimitDrafts] = useState<Record<string, number>>({});
     const [activeProductLimitId, setActiveProductLimitId] = useState<string | null>(null);
+    const [savedProductLimitId, setSavedProductLimitId] = useState<string | null>(null);
 
     const loadOrders = async () => {
         const result = await getOrders();
@@ -697,8 +834,13 @@ function StaffDashboard({
                 return;
             }
 
-            await loadProducts();
-            setActionMessage({ type: "success", text: "Daily limit updated." });
+            setProducts((current) =>
+                current.map((product) => (product.id === productId ? { ...product, max_daily_limit: limit } : product))
+            );
+            setSavedProductLimitId(productId);
+            setTimeout(() => {
+                setSavedProductLimitId((current) => (current === productId ? null : current));
+            }, 1800);
         } finally {
             setActiveProductLimitId(null);
         }
@@ -738,24 +880,26 @@ function StaffDashboard({
             };
         }
 
-        if (staff.role === "baker") {
-            return {
-                pending: clearedOrders.filter((order) => order.status === "pending"),
-                active: clearedOrders.filter((order) => order.status === "preparing" && order.acknowledged_by === staff.id),
-                completed: clearedOrders.filter((order) => order.status === "prepared" && order.acknowledged_by === staff.id),
-            };
-        }
+        if (staff.role === "baker" || staff.role === "delivery") {
+            const dayFilteredOrders = clearedOrders.filter((order) => isWithinLastDays(order.created_at, staffFilterDays));
 
-        if (staff.role === "delivery") {
+            if (staff.role === "baker") {
+                return {
+                    pending: dayFilteredOrders.filter((order) => order.status === "pending"),
+                    active: dayFilteredOrders.filter((order) => order.status === "preparing" && order.acknowledged_by === staff.id),
+                    completed: dayFilteredOrders.filter((order) => order.status === "prepared" && order.acknowledged_by === staff.id),
+                };
+            }
+
             return {
-                pending: clearedOrders.filter((order) => order.status === "prepared"),
-                active: clearedOrders.filter((order) => order.status === "in transit" && order.acknowledged_by === staff.id),
-                completed: clearedOrders.filter((order) => order.status === "delivered" && order.acknowledged_by === staff.id),
+                pending: dayFilteredOrders.filter((order) => order.status === "prepared"),
+                active: dayFilteredOrders.filter((order) => order.status === "in transit" && order.acknowledged_by === staff.id),
+                completed: dayFilteredOrders.filter((order) => order.status === "delivered" && order.acknowledged_by === staff.id),
             };
         }
 
         return { pending: [], active: [], completed: [] };
-    }, [accountantOrders, orders, staff.id, staff.role]);
+    }, [accountantOrders, orders, staff.id, staff.role, staffFilterDays]);
 
     const filteredOrders = tabbedOrders[activeTab];
     const totalPages = Math.max(1, Math.ceil(filteredOrders.length / ORDERS_PER_PAGE));
@@ -768,10 +912,18 @@ function StaffDashboard({
         active: tabbedOrders.active.length,
         completed: tabbedOrders.completed.length,
     };
-    const bakerWorkOrders = useMemo(
-        () => staff.role === "baker" ? [...tabbedOrders.pending, ...tabbedOrders.active] : [],
-        [staff.role, tabbedOrders]
-    );
+    const bakerWorkOrders = useMemo(() => {
+        if (staff.role !== "baker") return [];
+
+        const todaysClearedOrders = orders.filter(
+            (order) => isOperationallyClearedPayment(order.payment_status) && isWithinLastDays(order.created_at, 1)
+        );
+
+        return [
+            ...todaysClearedOrders.filter((order) => order.status === "pending"),
+            ...todaysClearedOrders.filter((order) => order.status === "preparing" && order.acknowledged_by === staff.id),
+        ];
+    }, [orders, staff.id, staff.role]);
     const bakerProductionSummary = useMemo<ProductionSummaryItem[]>(() => {
         const summary = new Map<string, {
             productName: string;
@@ -818,7 +970,7 @@ function StaffDashboard({
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [activeTab, staff.role]);
+    }, [activeTab, staff.role, staffFilterDays, accountantFilterDays]);
 
     useEffect(() => {
         loadFeedbackTickets();
@@ -832,12 +984,12 @@ function StaffDashboard({
 
     return (
         <div className="space-y-10">
-            <div className="flex items-end justify-between gap-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                     <p className="mb-2 text-[10px] font-black uppercase tracking-[0.3em] text-brand-gold-bright">{portalLabel}</p>
-                    <h1 className="text-4xl font-serif font-black tracking-tight text-brand-olive-dark">Order Workspace</h1>
+                    <h1 className="text-3xl font-serif font-black tracking-tight text-brand-olive-dark sm:text-4xl">Order Workspace</h1>
                 </div>
-                <div className="rounded-2xl bg-white px-5 py-4 shadow-premium">
+                <div className="w-fit rounded-2xl bg-white px-5 py-4 shadow-premium">
                     <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Session Role</p>
                     <p className="text-sm font-black text-brand-olive-dark">{getRoleLabel(staff.role)}</p>
                 </div>
@@ -943,6 +1095,7 @@ function StaffDashboard({
                             {products.map((product) => {
                                 const draftLimit = productLimitDrafts[product.id] ?? 0;
                                 const isSaving = activeProductLimitId === product.id;
+                                const justSaved = savedProductLimitId === product.id;
                                 const hasChanged = draftLimit !== Number(product.max_daily_limit || 0);
 
                                 return (
@@ -973,10 +1126,19 @@ function StaffDashboard({
                                         <button
                                             onClick={() => handleProductLimitSave(product.id)}
                                             disabled={!hasChanged || isSaving}
-                                            className="flex items-center justify-center gap-2 rounded-2xl bg-brand-olive-dark px-5 py-4 text-xs font-black uppercase tracking-widest text-white shadow-sm transition-all hover:bg-brand-gold-bright disabled:opacity-50"
+                                            className={cn(
+                                                "flex items-center justify-center gap-2 rounded-2xl px-5 py-4 text-xs font-black uppercase tracking-widest text-white shadow-sm transition-all duration-300 disabled:opacity-50",
+                                                justSaved ? "bg-green-600 scale-105" : "bg-brand-olive-dark hover:bg-brand-gold-bright"
+                                            )}
                                         >
-                                            {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                                            Save
+                                            {isSaving ? (
+                                                <Loader2 size={16} className="animate-spin" />
+                                            ) : justSaved ? (
+                                                <CheckCircle2 size={16} />
+                                            ) : (
+                                                <Save size={16} />
+                                            )}
+                                            {justSaved ? "Saved" : "Save"}
                                         </button>
                                     </div>
                                 );
@@ -1004,6 +1166,25 @@ function StaffDashboard({
                     activeTicketId={activeFeedbackTicketId}
                     onStatusChange={handleFeedbackStatusChange}
                 />
+            ) : null}
+
+            {(staff.role === "baker" || staff.role === "delivery") && activeSection === "orders" ? (
+                <div className="flex w-fit gap-2 rounded-3xl bg-brand-soft-gray/50 p-2">
+                    {STAFF_FILTER_DAYS.map((days) => (
+                        <button
+                            key={days}
+                            onClick={() => setStaffFilterDays(days)}
+                            className={cn(
+                                "rounded-2xl px-8 py-4 text-[10px] font-black uppercase tracking-widest transition-all",
+                                staffFilterDays === days
+                                    ? "bg-brand-olive-dark text-white shadow-lg"
+                                    : "text-gray-400 hover:text-brand-olive-dark"
+                            )}
+                        >
+                            Last {days} Day{days > 1 ? "s" : ""}
+                        </button>
+                    ))}
+                </div>
             ) : null}
 
             {hasTabs && activeSection === "orders" ? (
@@ -1101,6 +1282,13 @@ function StaffDashboard({
                 ) : null}
                 </div>
             ) : null}
+
+            {staff.role === "admin" && activeSection === "products" ? <ProductsView /> : null}
+            {staff.role === "admin" && activeSection === "categories" ? <CategoriesView /> : null}
+            {staff.role === "admin" && activeSection === "staffmgmt" ? <StaffView /> : null}
+            {staff.role === "admin" && activeSection === "users" ? <UsersView /> : null}
+            {staff.role === "admin" && activeSection === "pricing" ? <PricingView /> : null}
+            {["admin", "manager", "accountant"].includes(staff.role) && activeSection === "payments" ? <PaymentRecordsView staffRole={staff.role} /> : null}
         </div>
     );
 }

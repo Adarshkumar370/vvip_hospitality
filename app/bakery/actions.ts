@@ -8,9 +8,8 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { getIronSession } from "iron-session";
 import { cookies, headers } from "next/headers";
-import { redirect } from "next/navigation";
 import { unstable_cache, revalidatePath } from "next/cache";
-import { adminSessionOptions, type AdminSessionData, staffSessionOptions, type StaffSessionData, userSessionOptions, type UserSessionData } from "@/lib/session";
+import { staffSessionOptions, type StaffSessionData, userSessionOptions, type UserSessionData } from "@/lib/session";
 import { EXTERNAL_API_TIMEOUT_MS, INVOICE_API_TIMEOUT_MS, getSafeErrorMessage, isTimeoutError, withTimeout } from "@/lib/timeout";
 import Razorpay from "razorpay";
 import * as crypto from "crypto";
@@ -243,6 +242,7 @@ async function getUserBillingSummaryInternal(userId: string) {
                 creditLimit: 0,
                 pendingAmount: 0,
                 availableCredit: 0,
+                creditBalance: 0,
                 billingCycleDay: null,
                 paymentTermsDays: null,
                 orders: [],
@@ -289,8 +289,29 @@ async function getUserBillingSummaryInternal(userId: string) {
     `;
 
     const orderViews = await Promise.all(orders.map(toOrderView).map(presignOrderView));
-    const pendingAmount = orderViews.reduce((sum: number, order: any) => sum + Number(order.total_price || 0), 0);
     const creditLimit = Number(user.credit_limit || 0);
+
+    // Running, all-time ledger (not scoped to the current cycle): what's owed is
+    // every postpaid order ever placed minus every payment ever recorded.
+    // available = credit_limit + amount_paid - amount_spent — a payment first
+    // pays down whatever's owed, and anything left over pushes availableCredit
+    // above the base credit_limit as reusable rollover credit.
+    const [{ total_spent }] = await sql`
+        SELECT COALESCE(SUM(total_amount), 0) AS total_spent
+        FROM orders
+        WHERE user_id = ${userId}
+          AND payment_type_snapshot = 'postpaid_user'
+          AND order_status <> 'cancelled'
+    `;
+    const [{ total_paid }] = await sql`
+        SELECT COALESCE(SUM(amount), 0) AS total_paid
+        FROM manual_payment_records
+        WHERE user_id = ${userId}
+    `;
+    const amountSpent = Number(total_spent || 0);
+    const amountPaid = Number(total_paid || 0);
+    const pendingAmount = Math.max(0, amountSpent - amountPaid);
+    const creditBalance = Math.max(0, amountPaid - amountSpent);
 
     return {
         success: true as const,
@@ -303,7 +324,8 @@ async function getUserBillingSummaryInternal(userId: string) {
             },
             creditLimit,
             pendingAmount,
-            availableCredit: Math.max(0, creditLimit - pendingAmount),
+            availableCredit: Math.max(0, creditLimit + amountPaid - amountSpent),
+            creditBalance,
             billingCycleDay: Number(user.billing_cycle_day || 1),
             paymentTermsDays: Number(user.payment_terms_days || 0),
             invoiceEmail: user.invoice_email || user.email,
@@ -576,10 +598,6 @@ const ALLOWED_MIME_EXTENSIONS: Record<string, string> = {
 // ---------------------------------------------------------------------------
 // Session helpers
 // ---------------------------------------------------------------------------
-async function getAdminSessionInternal() {
-    return getIronSession<AdminSessionData>(await cookies(), adminSessionOptions);
-}
-
 async function getRequestClientIp() {
     const headerList = await headers();
     return headerList.get("x-forwarded-for")?.split(",")[0]?.trim() || headerList.get("x-real-ip")?.trim() || "unknown";
@@ -609,11 +627,11 @@ function clearAuthRateLimit(key: string) {
 }
 
 async function requireAdminAction() {
-    const session = await getAdminSessionInternal();
-    if (!session.isAdmin) {
+    const staff = await getActiveStaffFromSession();
+    if (!staff || staff.role !== "admin") {
         return { success: false as const, error: "Unauthorized admin action." };
     }
-    return { success: true as const };
+    return { success: true as const, staff };
 }
 
 async function getActiveStaffFromSession() {
@@ -633,11 +651,6 @@ async function getActiveStaffFromSession() {
 }
 
 async function requireAdminOrStaffRoles(allowedRoles: StaffRole[]) {
-    const adminSession = await getAdminSessionInternal();
-    if (adminSession.isAdmin) {
-        return { success: true as const, actor: "admin" as const };
-    }
-
     const staff = await getActiveStaffFromSession();
     if (!staff || !allowedRoles.includes(staff.role)) {
         return { success: false as const, error: "Unauthorized staff action." };
@@ -700,15 +713,6 @@ export const getUserSession = cache(async function getUserSession() {
 
     return session.user;
 });
-
-/** Verify the caller is an authenticated admin. Throws/redirects if not. */
-export async function verifySession(): Promise<{ isAdmin: true }> {
-    const session = await getAdminSessionInternal();
-    if (!session.isAdmin) {
-        redirect("/bakery/admin/login");
-    }
-    return { isAdmin: true };
-}
 
 // ---------------------------------------------------------------------------
 // OTP Server Actions — Firebase Phone Auth token verification
@@ -876,46 +880,23 @@ export async function logoutUser() {
     const session = await getIronSession<UserSessionData>(await cookies(), userSessionOptions);
     session.destroy();
 }
-// ---------------------------------------------------------------------------
-// Admin Auth
-// ---------------------------------------------------------------------------
-export async function verifyAdmin(email: string, pass: string) {
-    const safeEmail = sanitizeLoginEmail(email);
-    const rateLimit = await consumeAuthRateLimit("admin", safeEmail || "blank");
-    if (!rateLimit.allowed) {
-        return { success: false as const, error: "Too many login attempts. Please try again later." };
-    }
-
+// Reads the host straight from DATABASE_URL (never the credentials) so the dashboard
+// shows which DB the app is actually pointed at instead of a stale hardcoded label.
+function getDbHostLabel() {
     try {
-        const staff = await sql`
-            SELECT designation, password_hash
-            FROM staff_members
-            WHERE email = ${safeEmail} AND status = 'active'
-        `;
-
-        if (staff.length > 0 && (staff[0] as any).designation === 'admin' && (staff[0] as any).password_hash) {
-            const isValid = await bcrypt.compare(pass, (staff[0] as any).password_hash);
-            if (isValid) {
-                const session = await getAdminSessionInternal();
-                session.isAdmin = true;
-                await session.save();
-                clearAuthRateLimit(rateLimit.key);
-                return { success: true as const };
-            }
-            return { success: false as const, error: "Invalid credentials" };
-        }
-        // If no staff found or role is not admin
-        return { success: false as const, error: "Invalid credentials" };
-    } catch (err) {
-        console.error("Admin verification failed:", err);
-        return { success: false as const, error: "Authentication service error" };
+        return new URL(process.env.DATABASE_URL || "").hostname || "unknown-host";
+    } catch {
+        return "unknown-host";
     }
 }
 
-export async function logoutAdmin() {
-    const session = await getAdminSessionInternal();
-    session.destroy();
-    redirect("/bakery/admin/login");
+function getFirebaseStatus() {
+    const projectId = process.env.FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+    const clientConfigured = Boolean(process.env.NEXT_PUBLIC_FIREBASE_API_KEY && process.env.NEXT_PUBLIC_FIREBASE_APP_ID);
+    return {
+        configured: Boolean(projectId) && clientConfigured,
+        projectId: projectId || null,
+    };
 }
 
 export async function getHealthStatus() {
@@ -927,13 +908,14 @@ export async function getHealthStatus() {
                 connected: false,
                 error: "Unauthorized",
             },
+            firebase: getFirebaseStatus(),
             timestamp: new Date().toISOString(),
         };
     }
 
     try {
         const start = Date.now();
-        await sql`SELECT 1`;
+        const [{ db_name }] = await sql`SELECT current_database() AS db_name`;
         const latency = Date.now() - start;
 
         const userCount = await sql`SELECT count(*) FROM app_users`;
@@ -943,8 +925,11 @@ export async function getHealthStatus() {
             database: {
                 connected: true,
                 latency: `${latency}ms`,
-                userCount: parseInt(userCount[0].count)
+                userCount: parseInt(userCount[0].count),
+                dbName: db_name as string,
+                host: getDbHostLabel(),
             },
+            firebase: getFirebaseStatus(),
             timestamp: new Date().toISOString()
         };
     } catch (err) {
@@ -953,8 +938,10 @@ export async function getHealthStatus() {
             status: "unhealthy",
             database: {
                 connected: false,
-                error: "Connection failed"
+                error: "Connection failed",
+                host: getDbHostLabel(),
             },
+            firebase: getFirebaseStatus(),
             timestamp: new Date().toISOString()
         };
     }
@@ -1644,14 +1631,8 @@ function redactOrderForRole(order: any, role: StaffRole | "admin") {
 const ORDER_FEEDBACK_STATUSES = ["open", "in_review", "resolved", "closed"] as const;
 
 async function canManageOrderFeedback() {
-    const staffSession = await getIronSession<StaffSessionData>(await cookies(), staffSessionOptions);
-    const sessionStaff = staffSession.staff;
-    if (sessionStaff?.id && ["manager", "admin"].includes(sessionStaff.role)) {
-        return true;
-    }
-
-    const adminSession = await getAdminSessionInternal();
-    return Boolean(adminSession.isAdmin);
+    const staff = await getActiveStaffFromSession();
+    return Boolean(staff && ["manager", "admin"].includes(staff.role));
 }
 
 export async function getOrderFeedbackTickets() {
@@ -1940,13 +1921,6 @@ export async function staffLogin(email: string, pass: string) {
         delete staffRecord.password_hash;
         const staffWithoutHash = toStaffView(staffRecord);
 
-        // If Admin/Owner, grant session access to the global Admin Panel
-        if (staffWithoutHash.role === 'admin') {
-            const session = await getAdminSessionInternal();
-            session.isAdmin = true;
-            await session.save();
-        }
-
         // Grant the staff session cookie
         const staffSession = await getIronSession<StaffSessionData>(await cookies(), staffSessionOptions);
         staffSession.staff = staffWithoutHash;
@@ -1998,10 +1972,6 @@ async function getAuthenticatedStaffForPermission(permissionCode: string) {
 export async function logoutStaff() {
     const session = await getIronSession<StaffSessionData>(await cookies(), staffSessionOptions);
     session.destroy();
-
-    // Also destroy admin session if they are an admin
-    const adminSession = await getAdminSessionInternal();
-    adminSession.destroy();
 
     return { success: true };
 }
@@ -2901,6 +2871,11 @@ async function createOrderForUser(input: {
         console.warn("Frontend total mismatch", { frontendTotal: input.frontendTotal, calculatedTotal });
     }
 
+    // Set when this order's full cost is already covered by the customer's
+    // existing postpaid credit balance (see getUserBillingSummaryInternal) — such
+    // orders get auto-marked paid below instead of sitting as postpaid-pending.
+    let isFullyCoveredByCredit = false;
+
     if (isPostpaidUser) {
         if (userProfile.billing_status !== "active") {
             return { success: false, error: "Postpaid billing is not active for this account." };
@@ -2918,6 +2893,9 @@ async function createOrderForUser(input: {
                 error: `Postpaid limit exceeded. Available balance is INR ${availableCredit.toFixed(2)}.`,
             };
         }
+
+        const creditBalance = Number(billingSummary.summary.creditBalance || 0);
+        isFullyCoveredByCredit = creditBalance >= calculatedTotal;
     }
 
     const isStaffOrder = Boolean(input.placedByStaffId);
@@ -3004,6 +2982,19 @@ async function createOrderForUser(input: {
                 INSERT INTO receipts (payment_id, user_id, amount, notes)
                 VALUES (${payment.id}, ${input.userId}, ${savedOrder.total_amount}, 'Auto-issued for staff offline order')
                 ON CONFLICT (payment_id) DO NOTHING
+            `;
+        }
+
+        if (isFullyCoveredByCredit) {
+            await tx`
+                INSERT INTO payments (
+                    user_id, order_id, amount, currency_code, payment_method,
+                    payment_status, captured_at, provider_status_message
+                )
+                VALUES (
+                    ${input.userId}, ${savedOrder.id}, ${savedOrder.total_amount}, 'INR', 'postpaid_credit',
+                    'succeeded', now(), 'Covered by existing postpaid credit balance'
+                )
             `;
         }
 
@@ -3237,6 +3228,214 @@ export async function staffPlaceOrder(
     }
 }
 
+// --- MANUAL / OFFLINE PAYMENT RECORDS ---
+
+const MANUAL_PAYMENT_METHODS = ["cash", "upi", "bank_transfer", "card", "net_banking", "wallet"] as const;
+
+const manualPaymentSchema = z.object({
+    userId: z.string().uuid(),
+    amount: z.coerce.number().positive().max(10_000_000),
+    paymentMethod: z.enum(MANUAL_PAYMENT_METHODS),
+    notes: z.string().max(1000).trim().optional(),
+    paymentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+
+export async function recordManualPayment(input: {
+    userId: string;
+    amount: number | string;
+    paymentMethod: string;
+    notes?: string;
+    paymentDate?: string;
+}) {
+    const auth = await requireAdminOrStaffRoles(["admin", "manager", "accountant"]);
+    if (!auth.success) return auth;
+
+    const parsed = manualPaymentSchema.safeParse(input);
+    if (!parsed.success) {
+        return { success: false as const, error: parsed.error.issues[0]?.message || "Invalid payment details" };
+    }
+
+    try {
+        const [user] = await sql`SELECT id FROM app_users WHERE id = ${parsed.data.userId}`;
+        if (!user) {
+            return { success: false as const, error: "Selected user is not a registered app user." };
+        }
+
+        // No separate ledger to update here: getUserBillingSummaryInternal computes
+        // pendingAmount/availableCredit live as (all-time orders) minus (all-time
+        // manual_payment_records), so recording the payment is all that's needed
+        // for it to immediately offset debt / roll over as credit.
+        const paymentDate = parsed.data.paymentDate || new Date().toISOString().slice(0, 10);
+        const [record] = await sql`
+            INSERT INTO manual_payment_records (
+                user_id, amount, payment_method, notes,
+                recorded_by_staff_id, payment_date
+            )
+            VALUES (
+                ${parsed.data.userId},
+                ${parsed.data.amount},
+                ${parsed.data.paymentMethod},
+                ${parsed.data.notes || null},
+                ${auth.staff.id},
+                ${paymentDate}
+            )
+            RETURNING id, currency_code
+        `;
+
+        await sql`
+            INSERT INTO manual_payment_record_history (
+                record_id, action, amount, currency_code, payment_method, payment_date, notes, changed_by_staff_id
+            )
+            VALUES (
+                ${record.id}, 'created', ${parsed.data.amount}, ${record.currency_code}, ${parsed.data.paymentMethod},
+                ${paymentDate}, ${parsed.data.notes || null}, ${auth.staff.id}
+            )
+        `;
+
+        return { success: true as const, id: record.id };
+    } catch (err) {
+        console.error("Failed to record manual payment:", err);
+        return { success: false as const, error: "Database error" };
+    }
+}
+
+const manualPaymentUpdateSchema = z.object({
+    recordId: z.string().uuid(),
+    amount: z.coerce.number().positive().max(10_000_000),
+    paymentMethod: z.enum(MANUAL_PAYMENT_METHODS),
+    notes: z.string().max(1000).trim().optional(),
+    paymentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+export async function updateManualPaymentRecord(input: {
+    recordId: string;
+    amount: number | string;
+    paymentMethod: string;
+    notes?: string;
+    paymentDate: string;
+}) {
+    const auth = await requireAdminOrStaffRoles(["admin"]);
+    if (!auth.success) return auth;
+
+    const parsed = manualPaymentUpdateSchema.safeParse(input);
+    if (!parsed.success) {
+        return { success: false as const, error: parsed.error.issues[0]?.message || "Invalid payment details" };
+    }
+
+    try {
+        const [record] = await sql`
+            UPDATE manual_payment_records
+            SET amount = ${parsed.data.amount},
+                payment_method = ${parsed.data.paymentMethod},
+                notes = ${parsed.data.notes || null},
+                payment_date = ${parsed.data.paymentDate}
+            WHERE id = ${parsed.data.recordId}
+            RETURNING id, currency_code
+        `;
+
+        if (!record) {
+            return { success: false as const, error: "Payment record not found" };
+        }
+
+        await sql`
+            INSERT INTO manual_payment_record_history (
+                record_id, action, amount, currency_code, payment_method, payment_date, notes, changed_by_staff_id
+            )
+            VALUES (
+                ${record.id}, 'updated', ${parsed.data.amount}, ${record.currency_code}, ${parsed.data.paymentMethod},
+                ${parsed.data.paymentDate}, ${parsed.data.notes || null}, ${auth.staff.id}
+            )
+        `;
+
+        return { success: true as const, id: record.id };
+    } catch (err) {
+        console.error("Failed to update manual payment record:", err);
+        return { success: false as const, error: "Database error" };
+    }
+}
+
+export async function getManualPaymentRecordHistory(recordId: string) {
+    const auth = await requireAdminOrStaffRoles(["admin", "manager", "accountant"]);
+    if (!auth.success) return { ...auth, history: [] };
+
+    if (!isUuid(recordId)) {
+        return { success: false as const, error: "Invalid record", history: [] };
+    }
+
+    try {
+        const history = await sql`
+            SELECT
+                h.id, h.action, h.amount, h.currency_code, h.payment_method,
+                h.payment_date, h.notes, h.created_at,
+                s.staff_name AS changed_by_name, s.designation AS changed_by_designation
+            FROM manual_payment_record_history h
+            JOIN staff_members s ON s.id = h.changed_by_staff_id
+            WHERE h.record_id = ${recordId}
+            ORDER BY h.created_at ASC
+        `;
+
+        return {
+            success: true as const,
+            history: history.map((h: any) => ({
+                id: h.id,
+                action: h.action,
+                amount: Number(h.amount),
+                currencyCode: h.currency_code,
+                paymentMethod: h.payment_method,
+                paymentDate: h.payment_date,
+                notes: h.notes,
+                createdAt: h.created_at,
+                changedByName: h.changed_by_name,
+                changedByRole: toStaffRole(h.changed_by_designation),
+            })),
+        };
+    } catch (err) {
+        console.error("Failed to fetch manual payment record history:", err);
+        return { success: false as const, error: "Database error", history: [] };
+    }
+}
+
+export async function getManualPaymentRecords() {
+    const auth = await requireAdminOrStaffRoles(["admin", "manager", "accountant"]);
+    if (!auth.success) return { ...auth, records: [] };
+
+    try {
+        const records = await sql`
+            SELECT
+                mpr.id, mpr.amount, mpr.currency_code, mpr.payment_method,
+                mpr.notes, mpr.payment_date, mpr.created_at,
+                u.first_name AS user_first_name, u.last_name AS user_last_name,
+                u.mobile_no AS user_mobile_no, u.email AS user_email,
+                s.staff_name AS recorded_by_name, s.designation AS recorded_by_designation
+            FROM manual_payment_records mpr
+            JOIN app_users u ON u.id = mpr.user_id
+            JOIN staff_members s ON s.id = mpr.recorded_by_staff_id
+            ORDER BY mpr.created_at DESC
+            LIMIT 500
+        `;
+        return {
+            success: true as const,
+            records: records.map((r: any) => ({
+                id: r.id,
+                amount: Number(r.amount),
+                currencyCode: r.currency_code,
+                paymentMethod: r.payment_method,
+                notes: r.notes,
+                paymentDate: r.payment_date,
+                createdAt: r.created_at,
+                userName: combineName(r.user_first_name, r.user_last_name),
+                userPhone: denormalizeMobileNo(r.user_mobile_no),
+                userEmail: r.user_email,
+                recordedByName: r.recorded_by_name,
+                recordedByRole: toStaffRole(r.recorded_by_designation),
+            })),
+        };
+    } catch (err) {
+        console.error("Failed to fetch manual payment records:", err);
+        return { success: false as const, error: "Database error", records: [] };
+    }
+}
+
 // --- USER PRICING MANAGEMENT ---
 
 export async function getUsers() {
@@ -3451,5 +3650,3 @@ export async function retryInvoiceGeneration(orderId: string, userId: string) {
         };
     }
 }
-
-

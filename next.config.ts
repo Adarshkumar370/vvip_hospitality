@@ -30,6 +30,12 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ["lucide-react"],
+    // Works around a Next 16.2.x dev-only bug: the React debug channel's
+    // served-from-cache check reads navigation transferSize, which Firefox
+    // reports as 0 for streamed pages, so dynamic pages (e.g. /bakery/order)
+    // reload themselves in an infinite loop during `next dev`.
+    // Fixed upstream in 16.3 (vercel/next.js#94634) — remove after upgrading.
+    reactDebugChannel: false,
   },
   serverExternalPackages: ["pdfkit"],
   images: {

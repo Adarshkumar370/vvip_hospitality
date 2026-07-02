@@ -7,7 +7,7 @@ export default function robots(): MetadataRoute.Robots {
                 userAgent: "*",
                 allow: "/",
                 disallow: [
-                    "/bakery/admin",
+                    "/bakery/developer",
                     "/bakery/checkout",
                     "/bakery/order",
                     "/bakery/settings",

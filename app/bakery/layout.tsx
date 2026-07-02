@@ -13,9 +13,9 @@ export default function BakeryLayout({
     children: React.ReactNode;
 }) {
     const pathname = usePathname();
-    const isAdminRoute = pathname?.startsWith("/bakery/admin");
     const isStaffRoute = pathname?.startsWith("/bakery/staff");
-    const hideNavbar = isAdminRoute || isStaffRoute;
+    const isDeveloperRoute = pathname?.startsWith("/bakery/developer");
+    const hideNavbar = isStaffRoute || isDeveloperRoute;
 
     return (
         <AuthProvider>
