@@ -20,7 +20,7 @@ const globalForSql = global as unknown as { sql: ReturnType<typeof postgres> };
 
 const sql = globalForSql.sql || postgres(connectionString as string, {
     ssl: "require",
-    max: 10,
+    max: 1,
     idle_timeout: 20,
     connect_timeout: 10,
     connection: {

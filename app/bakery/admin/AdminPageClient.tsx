@@ -40,7 +40,9 @@ import {
     uploadImage,
     getStaffMembers,
     addStaff,
+    updateStaff,
     deleteStaff,
+    setStaffStatus,
     getOrders,
     updateOrderStatus,
     logoutAdmin,
@@ -80,6 +82,7 @@ interface StaffMember {
     email: string;
     phone: string;
     role: "baker" | "manager" | "admin" | "accountant" | "delivery";
+    status?: "active" | "inactive";
     created_at?: string;
 }
 
@@ -569,6 +572,7 @@ function PricingView() {
     const [userPrices, setUserPrices] = useState<Record<string, number>>({});
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState<string | number | null>(null);
+    const [saveStatus, setSaveStatus] = useState<Record<string, "success" | "error" | null>>({});
 
     useEffect(() => {
         loadInitialData();
@@ -603,15 +607,15 @@ function PricingView() {
 
     const savePrice = async (productId: string | number) => {
         if (!selectedUser) return;
+        const key = String(productId);
         setIsSaving(productId);
-        const price = userPrices[String(productId)] || 0;
+        const price = userPrices[key] || 0;
         const result = await setUserPrice(selectedUser.id, productId, price);
-        if (result.success) {
-            // Optional: Show success toast
-        } else {
-            alert(result.error);
-        }
         setIsSaving(null);
+        setSaveStatus(prev => ({ ...prev, [key]: result.success ? "success" : "error" }));
+        setTimeout(() => {
+            setSaveStatus(prev => ({ ...prev, [key]: null }));
+        }, 2000);
     };
 
     return (
@@ -719,19 +723,55 @@ function PricingView() {
                                                             className="w-full bg-white border border-transparent focus:border-brand-gold-bright/30 outline-none rounded-xl py-3 pl-8 pr-4 text-sm font-bold text-brand-olive-dark transition-all shadow-sm"
                                                         />
                                                     </div>
-                                                    <button
-                                                        onClick={() => savePrice(product.id)}
-                                                        disabled={isSaving === product.id}
-                                                        className={cn(
-                                                            "px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 flex items-center gap-2",
-                                                            userPrices[String(product.id)] && userPrices[String(product.id)] !== product.price
-                                                                ? "bg-brand-olive-dark text-white hover:bg-brand-gold-bright shadow-md"
-                                                                : "bg-white text-gray-400 cursor-default"
-                                                        )}
-                                                    >
-                                                        {isSaving === product.id ? <Loader2 className="animate-spin" size={14} /> : <CheckCircle2 size={14} />}
-                                                        Update
-                                                    </button>
+                                                    <div className="relative">
+                                                        <button
+                                                            onClick={() => savePrice(product.id)}
+                                                            disabled={isSaving === product.id}
+                                                            className={cn(
+                                                                "px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 flex items-center gap-2",
+                                                                saveStatus[String(product.id)] === "success"
+                                                                    ? "bg-emerald-600 text-white shadow-md"
+                                                                    : saveStatus[String(product.id)] === "error"
+                                                                        ? "bg-red-600 text-white shadow-md"
+                                                                        : userPrices[String(product.id)] && userPrices[String(product.id)] !== product.price
+                                                                            ? "bg-brand-olive-dark text-white hover:bg-brand-gold-bright shadow-md"
+                                                                            : "bg-white text-gray-400 cursor-default"
+                                                            )}
+                                                        >
+                                                            <AnimatePresence mode="wait" initial={false}>
+                                                                {isSaving === product.id ? (
+                                                                    <motion.span key="loading" initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.6 }}>
+                                                                        <Loader2 className="animate-spin" size={14} />
+                                                                    </motion.span>
+                                                                ) : saveStatus[String(product.id)] === "success" ? (
+                                                                    <motion.span key="success" initial={{ opacity: 0, scale: 0.4, rotate: -45 }} animate={{ opacity: 1, scale: 1, rotate: 0 }} exit={{ opacity: 0, scale: 0.6 }} transition={{ type: "spring", stiffness: 400, damping: 15 }}>
+                                                                        <CheckCircle2 size={14} />
+                                                                    </motion.span>
+                                                                ) : saveStatus[String(product.id)] === "error" ? (
+                                                                    <motion.span key="error" initial={{ opacity: 0, scale: 0.4 }} animate={{ opacity: 1, scale: 1, x: [0, -4, 4, -4, 0] }} exit={{ opacity: 0, scale: 0.6 }} transition={{ duration: 0.4 }}>
+                                                                        <AlertCircle size={14} />
+                                                                    </motion.span>
+                                                                ) : (
+                                                                    <motion.span key="idle" initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.6 }}>
+                                                                        <CheckCircle2 size={14} />
+                                                                    </motion.span>
+                                                                )}
+                                                            </AnimatePresence>
+                                                            {saveStatus[String(product.id)] === "success" ? "Saved" : saveStatus[String(product.id)] === "error" ? "Failed" : "Update"}
+                                                        </button>
+                                                        <AnimatePresence>
+                                                            {saveStatus[String(product.id)] === "error" && (
+                                                                <motion.p
+                                                                    initial={{ opacity: 0, y: -4 }}
+                                                                    animate={{ opacity: 1, y: 0 }}
+                                                                    exit={{ opacity: 0, y: -4 }}
+                                                                    className="absolute -bottom-5 right-0 text-[9px] font-bold text-red-600 whitespace-nowrap"
+                                                                >
+                                                                    Update failed
+                                                                </motion.p>
+                                                            )}
+                                                        </AnimatePresence>
+                                                    </div>
                                                 </div>
                                             </div>
                                         ))}
@@ -1173,6 +1213,11 @@ function StaffView() {
         role: "baker",
         password: ""
     });
+    const [roleFilter, setRoleFilter] = useState("all");
+    const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+    const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
+    const [isUpdating, setIsUpdating] = useState(false);
+    const [statusUpdatingId, setStatusUpdatingId] = useState<string | number | null>(null);
 
     useEffect(() => {
         loadStaff();
@@ -1197,6 +1242,19 @@ function StaffView() {
         setIsSubmitting(false);
     };
 
+    const handleUpdate = async (data: { name: string, email: string, phone: string, role: string, password: string }) => {
+        if (!editingStaff) return;
+        setIsUpdating(true);
+        const result = await updateStaff(editingStaff.id, data);
+        if (result.success) {
+            setEditingStaff(null);
+            loadStaff();
+        } else {
+            alert(result.error);
+        }
+        setIsUpdating(false);
+    };
+
     const [deletingId, setDeletingId] = useState<string | number | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
 
@@ -1211,6 +1269,22 @@ function StaffView() {
         setDeletingId(null);
         loadStaff();
     };
+
+    const handleReactivate = async (member: StaffMember) => {
+        setStatusUpdatingId(member.id);
+        const result = await setStaffStatus(member.id, "active");
+        if (!result.success) {
+            alert(result.error);
+        }
+        setStatusUpdatingId(null);
+        loadStaff();
+    };
+
+    const visibleStaff = staff.filter((member) => {
+        if (roleFilter !== "all" && member.role !== roleFilter) return false;
+        if (statusFilter !== "all" && (member.status || "active") !== statusFilter) return false;
+        return true;
+    });
 
     return (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8 pb-20">
@@ -1280,44 +1354,247 @@ function StaffView() {
                 </div>
 
                 <div className="lg:col-span-2 space-y-4">
+                    <div className="bg-white p-4 rounded-3xl shadow-sm border border-brand-olive-dark/5 flex flex-wrap items-center gap-3">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-2">
+                            {visibleStaff.length} of {staff.length} member{staff.length === 1 ? "" : "s"}
+                        </span>
+                        <select
+                            value={roleFilter}
+                            onChange={(e) => setRoleFilter(e.target.value)}
+                            className="ml-auto bg-brand-soft-gray border-2 border-transparent focus:border-brand-gold-bright/30 outline-none rounded-xl py-2 px-4 text-xs font-bold text-brand-olive-dark transition-all"
+                        >
+                            <option value="all">All Roles</option>
+                            <option value="baker">Baker</option>
+                            <option value="delivery">Delivery Agent</option>
+                            <option value="manager">Manager</option>
+                            <option value="accountant">Accountant</option>
+                            <option value="admin">Admin / Owner</option>
+                        </select>
+                        <select
+                            value={statusFilter}
+                            onChange={(e) => setStatusFilter(e.target.value as "all" | "active" | "inactive")}
+                            className="bg-brand-soft-gray border-2 border-transparent focus:border-brand-gold-bright/30 outline-none rounded-xl py-2 px-4 text-xs font-bold text-brand-olive-dark transition-all"
+                        >
+                            <option value="all">All Statuses</option>
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                        </select>
+                    </div>
+
                     {isLoading ? (
                         <div className="flex justify-center p-20"><Loader2 className="animate-spin text-brand-gold-bright" /></div>
+                    ) : visibleStaff.length === 0 ? (
+                        <div className="py-16 text-center text-gray-400 font-serif italic bg-white rounded-3xl shadow-sm border border-brand-olive-dark/5">
+                            No staff members match these filters.
+                        </div>
                     ) : (
-                        staff.map((member) => (
-                            <div key={member.id} className="bg-white p-6 rounded-3xl shadow-sm border border-brand-olive-dark/5 flex items-center justify-between group hover:border-brand-gold-bright/30 transition-all">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-12 h-12 bg-brand-soft-gray rounded-2xl flex items-center justify-center text-brand-olive-dark font-black capitalize shadow-sm">
-                                        {member.role[0]}
-                                    </div>
-                                    <div>
-                                        <h4 className="font-black text-brand-olive-dark">{member.name}</h4>
-                                        <div className="flex gap-4 text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-                                            <span>{member.role}</span>
-                                            <span aria-hidden="true">-</span>
-                                            <span>{member.phone}</span>
+                        visibleStaff.map((member) => {
+                            const isInactive = member.status === "inactive";
+                            return (
+                                <div key={member.id} className={cn(
+                                    "bg-white p-6 rounded-3xl shadow-sm border flex items-center justify-between group transition-all",
+                                    isInactive ? "border-gray-200 opacity-60" : "border-brand-olive-dark/5 hover:border-brand-gold-bright/30"
+                                )}>
+                                    <div className="flex items-center gap-4 min-w-0">
+                                        <div className="w-12 h-12 bg-brand-soft-gray rounded-2xl flex items-center justify-center text-brand-olive-dark font-black capitalize shadow-sm shrink-0">
+                                            {member.name[0]}
+                                        </div>
+                                        <div className="min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                <h4 className="font-black text-brand-olive-dark truncate">{member.name}</h4>
+                                                <span className={cn(
+                                                    "text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full shrink-0",
+                                                    isInactive ? "bg-gray-100 text-gray-400" : "bg-green-50 text-green-600"
+                                                )}>
+                                                    {isInactive ? "Inactive" : "Active"}
+                                                </span>
+                                            </div>
+                                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                                                <span>{member.role}</span>
+                                                <span aria-hidden="true">-</span>
+                                                <span>{member.phone}</span>
+                                                <span aria-hidden="true">-</span>
+                                                <span className="lowercase truncate">{member.email}</span>
+                                            </div>
                                         </div>
                                     </div>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                        <button
+                                            onClick={() => setEditingStaff(member)}
+                                            className="p-3 text-gray-300 hover:text-brand-gold-bright transition-colors"
+                                            aria-label={`Edit ${member.name}`}
+                                        >
+                                            <Pencil size={18} />
+                                        </button>
+                                        {isInactive ? (
+                                            <button
+                                                onClick={() => handleReactivate(member)}
+                                                disabled={statusUpdatingId === member.id}
+                                                className="p-3 text-gray-300 hover:text-green-600 transition-colors disabled:opacity-50"
+                                                aria-label={`Reactivate ${member.name}`}
+                                            >
+                                                {statusUpdatingId === member.id ? <Loader2 size={18} className="animate-spin" /> : <RefreshCw size={18} />}
+                                            </button>
+                                        ) : (
+                                            <button
+                                                onClick={() => setDeletingId(member.id)}
+                                                className="p-3 text-gray-300 hover:text-red-500 transition-colors"
+                                                aria-label={`Deactivate ${member.name}`}
+                                            >
+                                                <Trash2 size={18} />
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
-                                <button
-                                    onClick={() => setDeletingId(member.id)}
-                                    className="p-3 text-gray-300 hover:text-red-500 transition-colors"
-                                >
-                                    <Trash2 size={18} />
-                                </button>
-                            </div>
-                        ))
+                            );
+                        })
                     )}
                 </div>
             </div>
 
             <ConfirmDeleteModal
                 isOpen={!!deletingId}
-                message="Are you sure you want to remove this staff member? This action cannot be undone."
+                message="Are you sure you want to deactivate this staff member? They will lose portal access, but their records are kept and can be reactivated later."
                 isLoading={isDeleting}
                 onConfirm={handleDelete}
                 onCancel={() => setDeletingId(null)}
             />
+
+            <AnimatePresence>
+                {editingStaff && (
+                    <EditStaffModal
+                        staff={editingStaff}
+                        onClose={() => setEditingStaff(null)}
+                        onSave={handleUpdate}
+                        isSubmitting={isUpdating}
+                    />
+                )}
+            </AnimatePresence>
         </motion.div>
+    );
+}
+
+interface EditStaffModalProps {
+    staff: StaffMember;
+    onClose: () => void;
+    onSave: (data: { name: string, email: string, phone: string, role: string, password: string }) => void;
+    isSubmitting: boolean;
+}
+
+function EditStaffModal({ staff, onClose, onSave, isSubmitting }: EditStaffModalProps) {
+    const [data, setData] = useState({
+        name: staff.name,
+        email: staff.email,
+        phone: staff.phone,
+        role: staff.role,
+        password: ""
+    });
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        onSave(data);
+    };
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={onClose}
+                className="absolute inset-0 bg-brand-olive-dark/60 backdrop-blur-sm"
+            />
+            <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                className="relative w-full max-w-lg bg-white rounded-[3rem] shadow-2xl overflow-hidden border border-white/20"
+            >
+                <div className="p-10">
+                    <div className="flex items-center justify-between mb-8">
+                        <div>
+                            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-brand-gold-bright mb-1">Human Resources</p>
+                            <h3 className="text-3xl font-serif font-black text-brand-olive-dark">Edit Staff Member</h3>
+                        </div>
+                        <button onClick={onClose} className="p-3 bg-brand-soft-gray rounded-2xl text-gray-400 hover:text-brand-olive-dark transition-colors">
+                            <X size={24} />
+                        </button>
+                    </div>
+
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-4">Full Name</label>
+                            <input
+                                required
+                                type="text"
+                                value={data.name}
+                                onChange={(e) => setData({ ...data, name: e.target.value })}
+                                className="w-full bg-brand-soft-gray border-2 border-transparent focus:border-brand-gold-bright/30 focus:bg-white outline-none rounded-2xl py-4 px-6 text-sm font-bold text-brand-olive-dark transition-all"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-4">Email</label>
+                            <input
+                                required
+                                type="email"
+                                value={data.email}
+                                onChange={(e) => setData({ ...data, email: e.target.value })}
+                                className="w-full bg-brand-soft-gray border-2 border-transparent focus:border-brand-gold-bright/30 focus:bg-white outline-none rounded-2xl py-4 px-6 text-sm font-bold text-brand-olive-dark transition-all"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-4">Phone</label>
+                            <input
+                                required
+                                type="tel"
+                                value={data.phone}
+                                onChange={(e) => setData({ ...data, phone: e.target.value })}
+                                className="w-full bg-brand-soft-gray border-2 border-transparent focus:border-brand-gold-bright/30 focus:bg-white outline-none rounded-2xl py-4 px-6 text-sm font-bold text-brand-olive-dark transition-all"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-4">Role</label>
+                            <select
+                                value={data.role}
+                                onChange={(e) => setData({ ...data, role: e.target.value as StaffMember["role"] })}
+                                className="w-full bg-brand-soft-gray border-2 border-transparent focus:border-brand-gold-bright/30 focus:bg-white outline-none rounded-2xl py-4 px-6 text-sm font-bold text-brand-olive-dark transition-all"
+                            >
+                                <option value="baker">Baker</option>
+                                <option value="delivery">Delivery Agent</option>
+                                <option value="manager">Manager</option>
+                                <option value="accountant">Accountant</option>
+                                <option value="admin">Admin / Owner</option>
+                            </select>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-4">New Password (optional)</label>
+                            <input
+                                type="password"
+                                placeholder="Leave blank to keep current password"
+                                value={data.password}
+                                onChange={(e) => setData({ ...data, password: e.target.value })}
+                                className="w-full bg-brand-soft-gray border-2 border-transparent focus:border-brand-gold-bright/30 focus:bg-white outline-none rounded-2xl py-4 px-6 text-sm font-bold text-brand-olive-dark transition-all"
+                            />
+                        </div>
+                        <div className="flex gap-4 pt-4">
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                className="flex-1 bg-brand-soft-gray text-brand-olive-dark py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-gray-200 transition-all"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                disabled={isSubmitting}
+                                className="flex-1 bg-brand-olive-dark text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-brand-gold-bright transition-all shadow-xl disabled:opacity-50"
+                            >
+                                {isSubmitting ? "Saving..." : "Save Changes"}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </motion.div>
+        </div>
     );
 }
 

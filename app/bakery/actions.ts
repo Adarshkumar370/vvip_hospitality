@@ -75,6 +75,14 @@ const staffSchema = z.object({
     password: z.string().min(8, "Password must be at least 8 characters"),
 });
 
+const staffUpdateSchema = z.object({
+    name: z.string().min(1).max(100).trim(),
+    email: z.string().email(),
+    phone: z.string().regex(/^\d{10}$/),
+    role: z.enum(STAFF_ROLES),
+    password: z.union([z.string().min(8, "Password must be at least 8 characters"), z.literal("")]).optional(),
+});
+
 const addressSchema = z.object({
     user_id: z.union([z.string().uuid(), z.number()]),
     receiver_name: z.string().min(1).max(100).trim(),
@@ -118,6 +126,7 @@ function getHourInTimeZone(date: Date, timeZone: string) {
 }
 
 function isOrderingClosed(now = new Date()) {
+    if (process.env.NODE_ENV === "development") return false;
     const currentHour = getHourInTimeZone(now, ORDERING_TIME_ZONE);
     return currentHour >= ORDERING_CLOSED_START_HOUR || currentHour < ORDERING_OPEN_HOUR;
 }
@@ -1317,8 +1326,7 @@ export async function getStaffMembers() {
         const staff = await sql`
             SELECT id, staff_name, email, mobile_no, designation, status, created_at
             FROM staff_members
-            WHERE status = 'active'
-            ORDER BY created_at DESC
+            ORDER BY (status = 'active') DESC, created_at DESC
         `;
         return { success: true, staff: staff.map(toStaffView) };
     } catch (err) {
@@ -1390,6 +1398,101 @@ export async function deleteStaff(id: string | number) {
     } catch (err) {
         console.error("Failed to delete staff:", err);
         return { success: false, error: "Failed to delete staff" };
+    }
+}
+
+export async function updateStaff(id: string | number, staffMember: { name: string, email: string, phone: string, role: string, password?: string }) {
+    const auth = await requireAdminAction();
+    if (!auth.success) return auth;
+
+    const parsed = staffUpdateSchema.safeParse(staffMember);
+    if (!parsed.success) {
+        return { success: false as const, error: parsed.error.issues[0].message };
+    }
+
+    try {
+        const currentRows = await sql`SELECT designation FROM staff_members WHERE id = ${id}`;
+        if (currentRows.length === 0) return { success: false as const, error: "Staff member not found" };
+
+        const currentRole = toStaffRole((currentRows[0] as any).designation);
+        const nextRole = parsed.data.role;
+
+        // Guard against demoting the last remaining admin
+        if (currentRole === "admin" && nextRole !== "admin") {
+            const adminCount = await sql`SELECT count(*) FROM staff_members WHERE designation = 'admin' AND status = 'active'`;
+            const currentCount = parseInt((adminCount[0] as any).count);
+            if (currentCount <= 1) {
+                return {
+                    success: false as const,
+                    error: "Security Lock: Cannot change the role of the last administrator account.",
+                };
+            }
+        }
+
+        const updatedStaff = await sql.begin(async (tx: any) => {
+            const passwordHash = parsed.data.password ? await bcrypt.hash(parsed.data.password, 12) : null;
+
+            const [updated] = passwordHash
+                ? await tx`
+                    UPDATE staff_members
+                    SET staff_name = ${parsed.data.name}, email = ${parsed.data.email},
+                        mobile_no = ${normalizeMobileNo(parsed.data.phone)}, designation = ${toStaffDesignation(nextRole)},
+                        password_hash = ${passwordHash}
+                    WHERE id = ${id}
+                    RETURNING id, staff_name, email, mobile_no, designation, status, created_at
+                `
+                : await tx`
+                    UPDATE staff_members
+                    SET staff_name = ${parsed.data.name}, email = ${parsed.data.email},
+                        mobile_no = ${normalizeMobileNo(parsed.data.phone)}, designation = ${toStaffDesignation(nextRole)}
+                    WHERE id = ${id}
+                    RETURNING id, staff_name, email, mobile_no, designation, status, created_at
+                `;
+
+            if (currentRole !== nextRole) {
+                await tx`UPDATE staff_permissions SET revoked_at = now() WHERE staff_id = ${id} AND revoked_at IS NULL`;
+                await grantDefaultStaffPermissions(tx, String(id), nextRole);
+            }
+
+            return toStaffView(updated);
+        });
+
+        return { success: true as const, staff: updatedStaff };
+    } catch (err) {
+        console.error("Failed to update staff member:", err);
+        return {
+            success: false as const,
+            error: getStaffMutationErrorMessage(err, "Failed to update staff due to a database error."),
+        };
+    }
+}
+
+export async function setStaffStatus(id: string | number, status: "active" | "inactive") {
+    const auth = await requireAdminAction();
+    if (!auth.success) return auth;
+
+    try {
+        const currentRows = await sql`SELECT designation FROM staff_members WHERE id = ${id}`;
+        if (currentRows.length === 0) return { success: false as const, error: "Staff member not found" };
+
+        const role = toStaffRole((currentRows[0] as any).designation);
+
+        if (status === "inactive" && role === "admin") {
+            const adminCount = await sql`SELECT count(*) FROM staff_members WHERE designation = 'admin' AND status = 'active'`;
+            const currentCount = parseInt((adminCount[0] as any).count);
+            if (currentCount <= 1) {
+                return {
+                    success: false as const,
+                    error: "Security Lock: Cannot deactivate the last administrator account.",
+                };
+            }
+        }
+
+        await sql`UPDATE staff_members SET status = ${status} WHERE id = ${id}`;
+        return { success: true as const };
+    } catch (err) {
+        console.error("Failed to update staff status:", err);
+        return { success: false as const, error: "Failed to update staff status" };
     }
 }
 
@@ -2007,23 +2110,24 @@ export async function addAddress(address: z.infer<typeof addressSchema>) {
         }
         requireSameUserId(sessionUser.id, parsed.data.user_id);
 
-        return await sql.begin(async (tx: any) => {
-            if (parsed.data.is_default) {
-                await tx`UPDATE user_addresses SET is_default = false WHERE user_id = ${parsed.data.user_id}`;
-            }
-
-            const [newAddress] = await tx`
-                INSERT INTO user_addresses (
-                    user_id, recipient_name, recipient_mobile_no,
-                    line1, line2, city, postal_code, is_default
-                ) VALUES (
-                    ${parsed.data.user_id}, ${parsed.data.receiver_name}, ${normalizeMobileNo(parsed.data.receiver_phone)},
-                    ${parsed.data.address_line1}, ${parsed.data.address_line2 || null},
-                    ${parsed.data.city}, ${parsed.data.pincode}, ${parsed.data.is_default}
-                ) RETURNING *
-            `;
-            return { success: true, address: toAddressView(newAddress) };
-        });
+        const [newAddress] = await sql`
+            INSERT INTO user_addresses (
+                user_id, recipient_name, recipient_mobile_no,
+                line1, line2, city, postal_code, is_default
+            )
+            VALUES (
+                ${parsed.data.user_id},
+                ${parsed.data.receiver_name},
+                ${normalizeMobileNo(parsed.data.receiver_phone)},
+                ${parsed.data.address_line1},
+                ${parsed.data.address_line2 || null},
+                ${parsed.data.city},
+                ${parsed.data.pincode},
+                ${parsed.data.is_default}
+            )
+            RETURNING *
+        `;
+        return { success: true, address: toAddressView(newAddress) };
     } catch (err) {
         console.error("Failed to add address:", err);
         return { success: false, error: "Database error" };
@@ -2042,27 +2146,21 @@ export async function updateAddress(id: string | number, userId: string | number
         }
         requireSameUserId(sessionUser.id, userId);
 
-        return await sql.begin(async (tx: any) => {
-            if (address.is_default) {
-                await tx`UPDATE user_addresses SET is_default = false WHERE user_id = ${userId}`;
-            }
-
-            const updated = await tx`
-                UPDATE user_addresses
-                SET
-                    recipient_name = COALESCE(${address.receiver_name ?? null}, recipient_name),
-                    recipient_mobile_no = COALESCE(${address.receiver_phone ? normalizeMobileNo(address.receiver_phone) : null}, recipient_mobile_no),
-                    line1 = COALESCE(${address.address_line1 ?? null}, line1),
-                    line2 = ${address.address_line2 ?? null},
-                    city = COALESCE(${address.city ?? null}, city),
-                    postal_code = COALESCE(${address.pincode ?? null}, postal_code),
-                    is_default = COALESCE(${address.is_default ?? null}, is_default)
-                WHERE id = ${id} AND user_id = ${userId}
-                RETURNING *
-            `;
-            if (updated.length === 0) return { success: false, error: "Address not found" };
-            return { success: true, address: toAddressView(updated[0]) };
-        });
+        const updated = await sql`
+            UPDATE user_addresses
+            SET
+                recipient_name = COALESCE(${address.receiver_name ?? null}, recipient_name),
+                recipient_mobile_no = COALESCE(${address.receiver_phone ? normalizeMobileNo(address.receiver_phone) : null}, recipient_mobile_no),
+                line1 = COALESCE(${address.address_line1 ?? null}, line1),
+                line2 = ${address.address_line2 ?? null},
+                city = COALESCE(${address.city ?? null}, city),
+                postal_code = COALESCE(${address.pincode ?? null}, postal_code),
+                is_default = COALESCE(${address.is_default ?? null}, is_default)
+            WHERE id = ${id} AND user_id = ${userId}
+            RETURNING *
+        `;
+        if (updated.length === 0) return { success: false, error: "Address not found" };
+        return { success: true, address: toAddressView(updated[0]) };
     } catch (err) {
         console.error("Failed to update address:", err);
         return { success: false, error: "Database error" };
@@ -2603,7 +2701,7 @@ const staffPlaceOrderSchema = placeOrderSchema.extend({
 
 const cartLimitValidationSchema = z.object({
     items: z.array(z.object({
-        id: uuidId,
+        id: z.union([z.string().min(1), z.number().int().positive()]).transform(String),
         quantity: z.coerce.number().int().positive().max(MAX_CART_ITEM_QUANTITY),
     })).min(1),
 });

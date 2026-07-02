@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     ShoppingBag,
@@ -67,6 +67,7 @@ interface OrderClientProps {
 
 export default function OrderClient({ initialProducts, initialCategories, user: serverUser, billingSummary }: OrderClientProps) {
     const { addToCart, cart, updateQuantity } = useCart();
+    const isHydrated = useSyncExternalStore(() => () => {}, () => true, () => false);
 
     const [activeCategory, setActiveCategory] = useState("All");
     const [searchQuery, setSearchQuery] = useState("");
@@ -198,28 +199,8 @@ export default function OrderClient({ initialProducts, initialCategories, user: 
                     </section>
                 )}
 
-                <div className="flex flex-col items-start justify-between gap-8 md:flex-row">
-                    <div className="w-full max-w-4xl overflow-x-auto rounded-[2.5rem] border border-white bg-white/50 p-3 pb-3 shadow-sm no-scrollbar md:pb-3">
-                        <div className="flex items-center gap-3">
-                            {initialCategories.map((cat) => (
-                                <button
-                                    key={cat}
-                                    onClick={() => setActiveCategory(cat)}
-                                    className={cn(
-                                        "whitespace-nowrap rounded-full px-6 py-3 text-[10px] font-black uppercase tracking-widest transition-all",
-                                        activeCategory === cat
-                                            ? "scale-105 bg-brand-olive-dark text-white shadow-lg"
-                                            : "text-brand-olive-dark/70 hover:bg-white hover:text-brand-olive-dark"
-                                    )}
-                                    aria-pressed={activeCategory === cat}
-                                >
-                                    {cat}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className="group relative w-full md:w-96">
+                <div className="flex flex-col gap-6">
+                    <div className="group relative w-full md:ml-auto md:w-96">
                         <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-500 transition-colors group-focus-within:text-brand-gold-bright" size={20} aria-hidden="true" />
                         <input
                             type="text"
@@ -230,12 +211,32 @@ export default function OrderClient({ initialProducts, initialCategories, user: 
                             className="w-full rounded-[2rem] border-2 border-transparent bg-white py-4 pl-14 pr-8 text-sm font-bold text-brand-olive-dark shadow-sm outline-none transition-all focus:border-brand-gold-bright/30"
                         />
                     </div>
+
+                    <div className="w-full rounded-[1.75rem] sm:rounded-[2rem] border border-white bg-white/50 p-4 shadow-sm">
+                        <div className="flex flex-wrap items-center gap-2.5">
+                            {initialCategories.map((cat) => (
+                                <button
+                                    key={cat}
+                                    onClick={() => setActiveCategory(cat)}
+                                    className={cn(
+                                        "whitespace-nowrap rounded-full px-5 py-2.5 text-[10px] font-black uppercase tracking-widest transition-all",
+                                        activeCategory === cat
+                                            ? "scale-105 bg-brand-olive-dark text-white shadow-lg"
+                                            : "bg-white/60 text-brand-olive-dark/70 hover:bg-white hover:text-brand-olive-dark hover:shadow-sm"
+                                    )}
+                                    aria-pressed={activeCategory === cat}
+                                >
+                                    {cat}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
                 </div>
 
                 <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     <AnimatePresence mode="popLayout">
                         {filteredProducts.map((product, idx) => {
-                            const cartItem = cart.find((i) => i.id === product.id);
+                            const cartItem = isHydrated ? cart.find((i) => i.id === product.id) : undefined;
                             const isAvailable = product.is_available !== false;
 
                             return (
@@ -299,6 +300,12 @@ export default function OrderClient({ initialProducts, initialCategories, user: 
                                                         inputMode="numeric"
                                                         pattern="[0-9]*"
                                                         value={String(cartItem.quantity)}
+                                                        onKeyDown={(e) => {
+                                                            const allowed = ["Backspace", "Delete", "Tab", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"];
+                                                            if (!allowed.includes(e.key) && !/^[0-9]$/.test(e.key)) {
+                                                                e.preventDefault();
+                                                            }
+                                                        }}
                                                         onChange={(e) => handleQuantityInput(product, e.target.value)}
                                                         disabled={!isAvailable}
                                                         className="w-20 bg-transparent px-4 text-center text-lg font-black text-brand-olive-dark outline-none disabled:text-gray-400"

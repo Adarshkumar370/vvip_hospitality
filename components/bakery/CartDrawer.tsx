@@ -8,6 +8,7 @@ import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import { validateCartProductLimits } from "@/app/bakery/actions";
 import { RupeeAmount } from "@/components/ui/RupeeAmount";
+import StockLimitModal, { StockViolation } from "@/components/bakery/StockLimitModal";
 import Image from "next/image";
 
 interface CartDrawerProps {
@@ -17,11 +18,12 @@ interface CartDrawerProps {
 }
 
 export default function CartDrawer({ isOpen, onClose, onRequireAuth }: CartDrawerProps) {
-    const { cart, removeFromCart, updateQuantity, totalPrice, totalItems } = useCart();
+    const { cart, removeFromCart, updateQuantity, clearCart, totalPrice, totalItems } = useCart();
     const { user, logout } = useAuth();
     const router = useRouter();
     const [checkoutError, setCheckoutError] = useState<string | null>(null);
     const [isCheckingOut, setIsCheckingOut] = useState(false);
+    const [stockViolations, setStockViolations] = useState<StockViolation[]>([]);
 
     const handleQuantityInput = (itemId: string | number, rawValue: string) => {
         const quantity = Number(rawValue);
@@ -55,12 +57,31 @@ export default function CartDrawer({ isOpen, onClose, onRequireAuth }: CartDrawe
                 setIsCheckingOut(false);
                 return;
             }
+            if (dailyLimitRes.error?.toLowerCase().includes("invalid cart")) {
+                clearCart();
+                setCheckoutError("Your cart had corrupted data and has been cleared. Please add items again.");
+                setIsCheckingOut(false);
+                return;
+            }
             setCheckoutError(dailyLimitRes.error || "Could not verify daily product limits.");
             setIsCheckingOut(false);
             return;
         }
         if (!dailyLimitRes.allowed) {
-            setCheckoutError(dailyLimitRes.violations[0]?.error || "Daily product limit exceeded.");
+            const orderingViolation = dailyLimitRes.violations.find((v) => v.productId === "ordering_window");
+            if (orderingViolation) {
+                setCheckoutError(orderingViolation.error);
+                setIsCheckingOut(false);
+                return;
+            }
+            dailyLimitRes.violations.forEach((v) => {
+                if (v.remaining === 0) {
+                    removeFromCart(v.productId);
+                } else {
+                    updateQuantity(v.productId, v.remaining);
+                }
+            });
+            setStockViolations(dailyLimitRes.violations);
             setIsCheckingOut(false);
             return;
         }
@@ -70,6 +91,13 @@ export default function CartDrawer({ isOpen, onClose, onRequireAuth }: CartDrawe
     };
 
     return (
+        <>
+        {stockViolations.length > 0 && (
+            <StockLimitModal
+                violations={stockViolations}
+                onClose={() => setStockViolations([])}
+            />
+        )}
         <AnimatePresence>
             {isOpen && (
                 <>
@@ -241,5 +269,6 @@ export default function CartDrawer({ isOpen, onClose, onRequireAuth }: CartDrawe
                 </>
             )}
         </AnimatePresence>
+        </>
     );
 }

@@ -32,7 +32,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
         if (!savedCart) return [];
 
         try {
-            return JSON.parse(savedCart);
+            const parsed = JSON.parse(savedCart);
+            if (!Array.isArray(parsed)) return [];
+            return parsed
+                .filter((item: any) => item && item.id != null)
+                .map((item: any) => ({ ...item, id: String(item.id) }));
         } catch (e) {
             console.error("Failed to parse saved cart", e);
             return [];

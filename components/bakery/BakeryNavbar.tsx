@@ -8,14 +8,12 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import AuthModal from "@/components/auth/AuthModal";
-import CartDrawer from "@/components/bakery/CartDrawer";
 
 export default function BakeryNavbar() {
     const { user, logout } = useAuth();
     const { totalItems } = useCart();
     const router = useRouter();
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-    const [isCartOpen, setIsCartOpen] = useState(false);
     const [authRedirectTo, setAuthRedirectTo] = useState("/bakery/order");
     const [isScrolled, setIsScrolled] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -133,97 +131,106 @@ export default function BakeryNavbar() {
                     </div>
 
                     {/* Actions */}
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                        {/* Cart */}
                         <button
-                            onClick={() => setIsCartOpen(true)}
+                            onClick={() => router.push("/bakery/cart")}
                             aria-label={isHydrated ? `View shopping cart, ${totalItems} items` : "View shopping cart"}
                             className={cn(
-                                "p-3 transition-colors relative",
+                                "flex items-center gap-2 px-3 py-2 transition-colors relative cursor-pointer",
                                 showSolidNav ? "text-brand-olive-dark/70 hover:text-brand-gold-bright" : "text-white/70 hover:text-white"
                             )}
                         >
-                            <ShoppingCart size={22} strokeWidth={2.5} aria-hidden="true" />
-                            {isHydrated && totalItems > 0 && (
-                                <span className="absolute top-2 right-2 w-5 h-5 bg-brand-gold-bright rounded-full border-2 border-white text-[9px] flex items-center justify-center text-white font-black shadow-lg">
-                                    {totalItems}
-                                </span>
-                            )}
+                            <div className="relative">
+                                <ShoppingCart size={28} strokeWidth={2.5} aria-hidden="true" />
+                                {isHydrated && totalItems > 0 && (
+                                    <span className="absolute -top-1.5 -right-2 w-5 h-5 bg-brand-gold-bright rounded-full border-2 border-white text-[9px] flex items-center justify-center text-white font-black shadow-lg">
+                                        {totalItems}
+                                    </span>
+                                )}
+                            </div>
+                            <span className={cn(
+                                "text-[11px] font-black uppercase tracking-widest transition-colors",
+                                showSolidNav ? "text-brand-olive-dark" : "text-white"
+                            )}>Cart</span>
                         </button>
 
-                        <div className={cn(
-                            "h-6 w-[1.5px] mx-2 hidden sm:block transition-colors",
-                            showSolidNav ? "bg-brand-olive-dark/10" : "bg-white/10"
-                        )} />
+                        {/* Desktop User — hidden on mobile */}
+                        <div className="hidden md:flex items-center">
+                            <div className={cn(
+                                "h-6 w-[1.5px] mx-2 transition-colors",
+                                showSolidNav ? "bg-brand-olive-dark/10" : "bg-white/10"
+                            )} />
+                            {user ? (
+                                <div className="relative">
+                                    <button
+                                        onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)}
+                                        className="flex items-center gap-3 pl-2 group"
+                                    >
+                                        <div className="flex flex-col items-end">
+                                            <span className="text-[9px] text-gray-400 font-black uppercase tracking-widest leading-none mb-1">Account</span>
+                                            <span className={cn(
+                                                "text-xs font-black leading-none transition-colors",
+                                                showSolidNav ? "text-brand-olive-dark" : "text-white"
+                                            )}>{user.name}</span>
+                                        </div>
+                                        <div className={cn(
+                                            "w-11 h-11 rounded-full flex items-center justify-center transition-all shadow-premium",
+                                            showSolidNav ? "bg-brand-soft-gray text-brand-olive-dark" : "bg-white/10 text-white border border-white/20"
+                                        )} aria-label="User profile">
+                                            <UserIcon size={20} aria-hidden="true" />
+                                        </div>
+                                    </button>
 
-                        {user ? (
-                            <div className="relative">
-                                <button
-                                    onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)}
-                                    className="flex items-center gap-3 pl-2 group"
-                                >
-                                    <div className="hidden sm:flex flex-col items-end">
-                                        <span className="text-[9px] text-gray-400 font-black uppercase tracking-widest leading-none mb-1">Account</span>
-                                        <span className={cn(
-                                            "text-xs font-black leading-none transition-colors",
-                                            showSolidNav ? "text-brand-olive-dark" : "text-white"
-                                        )}>{user.name}</span>
-                                    </div>
-                                    <div className={cn(
-                                        "w-11 h-11 rounded-full flex items-center justify-center transition-all shadow-premium",
-                                        showSolidNav ? "bg-brand-soft-gray text-brand-olive-dark" : "bg-white/10 text-white border border-white/20"
-                                    )} aria-label="User profile">
-                                        <UserIcon size={20} aria-hidden="true" />
-                                    </div>
-                                </button>
-
-                                <AnimatePresence>
-                                    {isUserDropdownOpen && (
-                                        <>
-                                            <div
-                                                className="fixed inset-0 z-0"
-                                                onClick={() => setIsUserDropdownOpen(false)}
-                                            />
-                                            <motion.div
-                                                initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                                                animate={{ opacity: 1, y: 0, scale: 1 }}
-                                                exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                                                className="absolute right-0 mt-4 w-56 bg-white rounded-3xl shadow-premium border border-brand-olive-dark/5 p-2 z-10"
-                                            >
-                                                <Link
-                                                    href="/bakery/settings"
+                                    <AnimatePresence>
+                                        {isUserDropdownOpen && (
+                                            <>
+                                                <div
+                                                    className="fixed inset-0 z-0"
                                                     onClick={() => setIsUserDropdownOpen(false)}
-                                                    className="flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-brand-soft-gray text-brand-olive-dark transition-all text-xs font-black uppercase tracking-widest"
+                                                />
+                                                <motion.div
+                                                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                                    className="absolute right-0 mt-4 w-56 bg-white rounded-3xl shadow-premium border border-brand-olive-dark/5 p-2 z-10"
                                                 >
-                                                    <Settings size={18} aria-hidden="true" />
-                                                    Settings
-                                                </Link>
-                                                <button
-                                                    onClick={handleLogout}
-                                                    className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-red-50 text-red-500 transition-all text-xs font-black uppercase tracking-widest"
-                                                >
-                                                    <LogOutIcon size={18} aria-hidden="true" />
-                                                    Logout
-                                                </button>
-                                            </motion.div>
-                                        </>
+                                                    <Link
+                                                        href="/bakery/settings"
+                                                        onClick={() => setIsUserDropdownOpen(false)}
+                                                        className="flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-brand-soft-gray text-brand-olive-dark transition-all text-xs font-black uppercase tracking-widest"
+                                                    >
+                                                        <Settings size={18} aria-hidden="true" />
+                                                        Settings
+                                                    </Link>
+                                                    <button
+                                                        onClick={handleLogout}
+                                                        className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-red-50 text-red-500 transition-all text-xs font-black uppercase tracking-widest"
+                                                    >
+                                                        <LogOutIcon size={18} aria-hidden="true" />
+                                                        Logout
+                                                    </button>
+                                                </motion.div>
+                                            </>
+                                        )}
+                                    </AnimatePresence>
+                                </div>
+                            ) : (
+                                <button
+                                    onClick={() => openAuthModal("/bakery/order")}
+                                    className={cn(
+                                        "flex items-center gap-3 px-8 py-3 rounded-full font-black text-[10px] uppercase tracking-[0.2em] transition-all shadow-xl active:scale-95 group",
+                                        showSolidNav
+                                            ? "bg-brand-olive-dark text-white hover:bg-brand-gold-bright"
+                                            : "bg-white text-brand-olive-dark hover:bg-brand-gold-bright hover:text-white"
                                     )}
-                                </AnimatePresence>
-                            </div>
-                        ) : (
-                            <button
-                                onClick={() => openAuthModal("/bakery/order")}
-                                className={cn(
-                                    "flex items-center gap-3 px-8 py-3 rounded-full font-black text-[10px] uppercase tracking-[0.2em] transition-all shadow-xl active:scale-95 group",
-                                    showSolidNav
-                                        ? "bg-brand-olive-dark text-white hover:bg-brand-gold-bright"
-                                        : "bg-white text-brand-olive-dark hover:bg-brand-gold-bright hover:text-white"
-                                )}
-                                aria-label="Partner Login"
-                            >
-                                <LogIn size={16} className="group-hover:translate-x-1 transition-transform" aria-hidden="true" />
-                                <span className="hidden sm:inline">Partner Login</span>
-                            </button>
-                        )}
+                                    aria-label="Login"
+                                >
+                                    <LogIn size={16} className="group-hover:translate-x-1 transition-transform" aria-hidden="true" />
+                                    Login
+                                </button>
+                            )}
+                        </div>
 
                         {/* Mobile Toggle */}
                         <button
@@ -261,8 +268,32 @@ export default function BakeryNavbar() {
                                 </Link>
                             ))}
                             <div className="h-[1px] bg-brand-olive-dark/10 my-4" />
+                            {/* Cart in menu */}
+                            <button
+                                onClick={() => { router.push("/bakery/cart"); setIsMobileMenuOpen(false); }}
+                                className="flex items-center gap-4 text-left text-3xl font-serif font-black text-brand-olive-dark"
+                            >
+                                <ShoppingCart size={28} strokeWidth={2.5} aria-hidden="true" />
+                                Cart
+                                {isHydrated && totalItems > 0 && (
+                                    <span className="ml-1 w-7 h-7 bg-brand-gold-bright rounded-full text-sm flex items-center justify-center text-white font-black">
+                                        {totalItems}
+                                    </span>
+                                )}
+                            </button>
+                            <div className="h-[1px] bg-brand-olive-dark/10" />
+                            {/* User section in menu */}
                             {user ? (
                                 <div className="flex flex-col gap-6">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 rounded-full bg-brand-soft-gray flex items-center justify-center">
+                                            <UserIcon size={24} className="text-brand-olive-dark" aria-hidden="true" />
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Account</p>
+                                            <p className="text-lg font-black text-brand-olive-dark">{user.name}</p>
+                                        </div>
+                                    </div>
                                     <Link
                                         href="/bakery/settings"
                                         onClick={() => setIsMobileMenuOpen(false)}
@@ -280,8 +311,11 @@ export default function BakeryNavbar() {
                             ) : (
                                 <button
                                     onClick={() => { openAuthModal("/bakery/order"); setIsMobileMenuOpen(false); }}
-                                    className="text-left text-xl font-black text-brand-gold-bright uppercase tracking-widest"
+                                    className="flex items-center gap-4 text-left text-xl font-black text-brand-olive-dark uppercase tracking-widest"
                                 >
+                                    <div className="w-12 h-12 rounded-full bg-brand-soft-gray flex items-center justify-center">
+                                        <UserIcon size={24} className="text-brand-olive-dark" aria-hidden="true" />
+                                    </div>
                                     Login
                                 </button>
                             )}
@@ -294,12 +328,6 @@ export default function BakeryNavbar() {
                 isOpen={isAuthModalOpen}
                 onClose={closeAuthModal}
                 redirectTo={authRedirectTo}
-            />
-
-            <CartDrawer
-                isOpen={isCartOpen}
-                onClose={() => setIsCartOpen(false)}
-                onRequireAuth={openAuthModal}
             />
         </>
     );

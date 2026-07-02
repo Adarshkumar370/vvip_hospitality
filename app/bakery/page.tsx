@@ -2,8 +2,7 @@
 
 import { motion } from "framer-motion";
 import { VVIP_BAKERY } from "@/lib/constants/bakery";
-import { ArrowRight, ChefHat, Truck, Award, BadgeCheck, UtensilsCrossed, ExternalLink, Briefcase, Wheat } from "lucide-react";
-import Link from "next/link";
+import { ChefHat, Truck, Award, BadgeCheck, UtensilsCrossed, Briefcase, Wheat } from "lucide-react";
 import Image from "next/image";
 import BakeryTestimonials from "@/components/bakery/BakeryTestimonials";
 import BakeryBackground from "@/components/bakery/BakeryBackground";
@@ -59,24 +58,6 @@ export default function VVIPBakery() {
                         {VVIP_BAKERY.headline}
                     </motion.p>
 
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: 0.4 }}
-                        className="mt-16 flex flex-col sm:flex-row items-center justify-center gap-6"
-                    >
-                        <Link
-                            href="/contact"
-                            className="group flex items-center gap-4 bg-brand-gold-bright text-brand-olive-dark px-6 py-4 sm:px-12 sm:py-6 rounded-full font-black text-sm uppercase tracking-widest hover:bg-white transition-all shadow-premium active:scale-95 w-full sm:w-auto justify-center"
-                        >
-                            Partner With Us
-                            <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
-                        </Link>
-                        <button className="flex items-center gap-4 bg-white/10 backdrop-blur-md border border-white/20 text-white px-6 py-4 sm:px-12 sm:py-6 rounded-full font-black text-sm uppercase tracking-widest hover:bg-white/20 transition-all active:scale-95 w-full sm:w-auto justify-center">
-                            View Catalog
-                            <ExternalLink size={20} />
-                        </button>
-                    </motion.div>
                 </div>
 
                 {/* Scroll Indicator */}
@@ -212,20 +193,6 @@ export default function VVIPBakery() {
                             Partner with the <br />
                             <span className="text-brand-gold-bright italic">Best Cloud Kitchen</span>
                         </h2>
-                        
-                        <div className="flex flex-col sm:flex-row gap-4 sm:gap-8 w-full max-w-2xl">
-                            <Link
-                                href="/contact"
-                                className="flex-1 px-6 py-4 sm:px-14 sm:py-8 bg-brand-gold-bright text-brand-olive-dark font-black rounded-2xl sm:rounded-3xl hover:bg-white transition-all flex items-center justify-center gap-4 shadow-2xl active:scale-95 text-base sm:text-lg"
-                            >
-                                Get Started
-                                <ArrowRight size={24} />
-                            </Link>
-                            <button className="flex-1 px-6 py-4 sm:px-14 sm:py-8 bg-white/10 backdrop-blur-md border border-white/20 text-white font-black rounded-2xl sm:rounded-3xl hover:bg-white/20 transition-all flex items-center justify-center gap-4 shadow-sm active:scale-95 text-base sm:text-lg">
-                                Download Catalog
-                                <ExternalLink size={24} />
-                            </button>
-                        </div>
                         
                         <div className="mt-10 sm:mt-16 md:mt-20 flex flex-col sm:flex-row items-center gap-6">
                             <div className="flex -space-x-4">

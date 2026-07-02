@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { AuthProvider } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
 import BakeryNavbar from "@/components/bakery/BakeryNavbar";
+import BakeryFooter from "@/components/bakery/BakeryFooter";
 
 export default function BakeryLayout({
     children,
@@ -26,6 +27,7 @@ export default function BakeryLayout({
                         </Suspense>
                     )}
                     <main>{children}</main>
+                    {!hideNavbar && <BakeryFooter />}
                 </div>
             </CartProvider>
         </AuthProvider>

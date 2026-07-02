@@ -15,6 +15,7 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import { getAddresses, createRazorpayOrder, verifyRazorpayPayment, placeOrder, validateCartProductLimits } from "@/app/bakery/actions";
+import StockLimitModal, { StockViolation } from "@/components/bakery/StockLimitModal";
 import { cn } from "@/lib/utils";
 import { RupeeAmount } from "@/components/ui/RupeeAmount";
 import Image from "next/image";
@@ -73,7 +74,7 @@ interface RazorpayOptions {
 
 export default function CheckoutPage() {
     const { user, logout, isLoading: isAuthLoading } = useAuth();
-    const { cart, totalPrice, clearCart } = useCart();
+    const { cart, totalPrice, clearCart, updateQuantity, removeFromCart } = useCart();
     const router = useRouter();
 
     const [addresses, setAddresses] = useState<Address[]>([]);
@@ -81,6 +82,7 @@ export default function CheckoutPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [isProcessing, setIsProcessing] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [stockViolations, setStockViolations] = useState<StockViolation[]>([]);
     const [checkoutIdempotencyKey] = useState(() => crypto.randomUUID());
 
     const isPostpaidUser = user?.payment_type === "postpaid_user";
@@ -166,9 +168,28 @@ export default function CheckoutPage() {
                     redirectToLogin();
                     return;
                 }
+                if (message.toLowerCase().includes("invalid cart")) {
+                    clearCart();
+                    throw new Error("Your cart had corrupted data and has been cleared. Please add items again.");
+                }
                 throw new Error(message);
             }
-            if (!dailyLimitRes.allowed) throw new Error(dailyLimitRes.violations[0]?.error || "Daily product limit exceeded.");
+            if (!dailyLimitRes.allowed) {
+                const orderingViolation = dailyLimitRes.violations.find((v) => v.productId === "ordering_window");
+                if (orderingViolation) {
+                    throw new Error(orderingViolation.error);
+                }
+                dailyLimitRes.violations.forEach((v) => {
+                    if (v.remaining === 0) {
+                        removeFromCart(v.productId);
+                    } else {
+                        updateQuantity(v.productId, v.remaining);
+                    }
+                });
+                setStockViolations(dailyLimitRes.violations);
+                setIsProcessing(false);
+                return;
+            }
 
             const orderRes = await finalizeOrder();
             if (!orderRes?.success) {
@@ -265,20 +286,27 @@ export default function CheckoutPage() {
     }
 
     return (
+        <>
+        {stockViolations.length > 0 && (
+            <StockLimitModal
+                violations={stockViolations}
+                onClose={() => setStockViolations([])}
+            />
+        )}
         <main className="min-h-screen bg-brand-soft-gray/30 pb-16 pt-28 md:pt-32">
             <div className="mx-auto max-w-7xl px-4 sm:px-6">
                 <button
-                    onClick={() => router.back()}
+                    onClick={() => router.push("/bakery/cart")}
                     className="group mb-8 flex items-center gap-2 text-brand-olive-dark/60 transition-colors hover:text-brand-olive-dark"
                 >
                     <ChevronLeft className="h-5 w-5 transition-transform group-hover:-translate-x-1" />
-                    <span className="text-sm font-black uppercase tracking-widest">Return to Swiss Affaire Basket</span>
+                    <span className="text-sm font-black uppercase tracking-widest">Back to Basket</span>
                 </button>
 
-                <div className="grid grid-cols-1 gap-12 lg:grid-cols-12">
-                    <div className="space-y-10 lg:col-span-8">
-                        <section className="rounded-[1.5rem] sm:rounded-[2.5rem] border border-brand-olive-dark/5 bg-white p-5 sm:p-8 md:p-10 shadow-premium">
-                            <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
+                    <div className="space-y-6 lg:col-span-7">
+                        <section className="rounded-2xl sm:rounded-3xl border border-brand-olive-dark/5 bg-white p-5 sm:p-7 shadow-sm">
+                            <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                 <div className="flex items-center gap-4">
                                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-soft-gray text-brand-gold-bright">
                                         <MapPin size={24} />
@@ -324,8 +352,8 @@ export default function CheckoutPage() {
                             </div>
                         </section>
 
-                        <section className="rounded-[1.5rem] sm:rounded-[2.5rem] border border-brand-olive-dark/5 bg-white p-5 sm:p-8 md:p-10 shadow-premium">
-                            <div className="mb-8 flex items-center gap-4">
+                        <section className="rounded-2xl sm:rounded-3xl border border-brand-olive-dark/5 bg-white p-5 sm:p-7 shadow-sm">
+                            <div className="mb-6 flex items-center gap-4">
                                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-soft-gray text-brand-gold-bright">
                                     <CreditCard size={24} />
                                 </div>
@@ -407,11 +435,11 @@ export default function CheckoutPage() {
                         </section>
                     </div>
 
-                    <div className="space-y-6 lg:col-span-4">
-                        <section className="sticky top-32 rounded-[1.5rem] sm:rounded-[2.5rem] bg-brand-olive-dark p-6 sm:p-8 md:p-10 text-white shadow-2xl">
-                            <h2 className="border-b border-white/10 pb-6 text-2xl font-serif font-black uppercase tracking-wider">Order Summary</h2>
+                    <div className="space-y-6 lg:col-span-5">
+                        <section className="sticky top-28 rounded-[1.5rem] sm:rounded-[2.5rem] bg-brand-olive-dark p-6 sm:p-8 text-white shadow-2xl flex flex-col max-h-[calc(100vh-8rem)] overflow-hidden">
+                            <h2 className="border-b border-white/10 pb-5 text-xl font-serif font-black uppercase tracking-wider flex-shrink-0">Order Summary</h2>
 
-                            <div className="custom-scrollbar mb-10 mt-8 max-h-60 space-y-6 overflow-y-auto pr-2">
+                            <div className="custom-scrollbar my-6 flex-1 space-y-5 overflow-y-auto pr-1 min-h-0">
                                 {cart.map((item) => (
                                     <div key={item.id} className="flex items-center justify-between gap-4">
                                         <div className="flex items-center gap-3">
@@ -430,7 +458,7 @@ export default function CheckoutPage() {
                                 ))}
                             </div>
 
-                            <div className="space-y-4 border-t border-white/10 pt-8">
+                            <div className="flex-shrink-0 space-y-3 border-t border-white/10 pt-5">
                                 <div className="flex items-center justify-between text-white/60">
                                     <span className="text-xs font-black uppercase tracking-widest">Subtotal</span>
                                     <RupeeAmount className="font-black" value={totalPrice} />
@@ -456,7 +484,7 @@ export default function CheckoutPage() {
                                 onClick={handleCheckout}
                                 disabled={isProcessing || !selectedAddressId}
                                 className={cn(
-                                    "mt-10 flex w-full items-center justify-center gap-3 rounded-2xl py-5 text-lg font-black shadow-xl transition-all active:scale-95",
+                                    "mt-5 flex w-full items-center justify-center gap-3 rounded-2xl py-4 text-base font-black shadow-xl transition-all active:scale-95",
                                     isProcessing || !selectedAddressId
                                         ? "cursor-not-allowed bg-gray-500"
                                         : "bg-white text-brand-olive-dark hover:bg-brand-gold-bright"
@@ -489,5 +517,6 @@ export default function CheckoutPage() {
                 </div>
             </div>
         </main>
+        </>
     );
 }
