@@ -161,7 +161,7 @@ export default function BakeryNavbar() {
                                 "h-6 w-[1.5px] mx-2 transition-colors",
                                 showSolidNav ? "bg-brand-olive-dark/10" : "bg-white/10"
                             )} />
-                            {user ? (
+                            {isHydrated && user ? (
                                 <div className="relative">
                                     <button
                                         onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)}
@@ -283,7 +283,7 @@ export default function BakeryNavbar() {
                             </button>
                             <div className="h-[1px] bg-brand-olive-dark/10" />
                             {/* User section in menu */}
-                            {user ? (
+                            {isHydrated && user ? (
                                 <div className="flex flex-col gap-6">
                                     <div className="flex items-center gap-4">
                                         <div className="w-12 h-12 rounded-full bg-brand-soft-gray flex items-center justify-center">

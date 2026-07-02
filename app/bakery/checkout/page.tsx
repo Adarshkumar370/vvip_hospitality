@@ -18,6 +18,7 @@ import { getAddresses, createRazorpayOrder, verifyRazorpayPayment, placeOrder, v
 import StockLimitModal, { StockViolation } from "@/components/bakery/StockLimitModal";
 import { cn } from "@/lib/utils";
 import { RupeeAmount } from "@/components/ui/RupeeAmount";
+import { getSafeImageSrc } from "@/lib/image-utils";
 import Image from "next/image";
 import { normalizeCartQuantity } from "@/lib/security-validation";
 
@@ -444,7 +445,7 @@ export default function CheckoutPage() {
                                     <div key={item.id} className="flex items-center justify-between gap-4">
                                         <div className="flex items-center gap-3">
                                             <div className="relative h-12 w-12 flex-shrink-0 overflow-hidden rounded-xl bg-white/10">
-                                                <Image src={item.image} alt={item.name} fill className="object-cover" />
+                                                <Image src={getSafeImageSrc(item.image)} alt={item.name} fill className="object-cover" />
                                             </div>
                                             <div>
                                                 <p className="text-sm font-black leading-tight">{item.name}</p>

@@ -24,7 +24,12 @@ const s3Client = new S3Client({
     },
 });
 
-const presignedUrlTtlSeconds = getTimeoutMs("STORAGE_S3_PRESIGN_TTL_SECONDS", 3_600) / 1000;
+function getSeconds(envName: string, fallbackSeconds: number) {
+    const value = Number(process.env[envName]);
+    return Number.isFinite(value) && value > 0 ? value : fallbackSeconds;
+}
+
+const presignedUrlTtlSeconds = getSeconds("STORAGE_S3_PRESIGN_TTL_SECONDS", 3_600);
 
 // The bucket is private; this "public" URL is never fetched directly — it's a stable,
 // parseable identifier stored in the DB and turned back into a presigned URL on read.

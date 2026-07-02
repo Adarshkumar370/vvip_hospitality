@@ -1,5 +1,6 @@
 "use server";
 
+import { cache } from "react";
 import sql from "@/lib/db";
 import s3Client, { buildStorageIdentifierUrl, getPresignedObjectUrl, stripPresignQuery, toSignedUrl } from "@/lib/s3";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
@@ -680,7 +681,11 @@ async function requireRecentlyVerifiedPhone(phone: string) {
     return { success: true as const, normalizedPhone, session };
 }
 
-export async function getUserSession() {
+// Memoized per-request: getUserSession() is called independently by page components
+// and by requireUserDataAccess() inside every server action on the page, so without
+// this it re-runs the app_users lookup (and competes for a DB pool connection)
+// multiple times per request.
+export const getUserSession = cache(async function getUserSession() {
     const session = await getIronSession<UserSessionData>(await cookies(), userSessionOptions);
     if (!session.user) return undefined;
 
@@ -694,7 +699,7 @@ export async function getUserSession() {
     }
 
     return session.user;
-}
+});
 
 /** Verify the caller is an authenticated admin. Throws/redirects if not. */
 export async function verifySession(): Promise<{ isAdmin: true }> {
@@ -956,6 +961,11 @@ export async function getHealthStatus() {
 }
 
 
+// Presigned URLs are cached alongside the product rows. This is safe because the
+// presign TTL (STORAGE_S3_PRESIGN_TTL_SECONDS, default 1hr) comfortably outlives
+// this cache's revalidate window, so a cached URL is never served past its expiry.
+// Presigning is synchronous CPU-bound crypto per item — doing it on every request
+// (instead of once per cache window) blocks the event loop for the whole catalog size.
 const getCachedProducts = unstable_cache(
     async () => {
         const products = await sql`
@@ -975,7 +985,8 @@ const getCachedProducts = unstable_cache(
             JOIN measurement_units mu ON mu.id = p.unit_id
             ORDER BY p.created_at DESC
         `;
-        return { success: true as const, products: products.map(toProductView) };
+        const presigned = await Promise.all(products.map(toProductView).map(presignProductView));
+        return { success: true as const, products: presigned };
     },
     ["bakery-products-v2"],
     { revalidate: 60, tags: ["products"] }
@@ -983,9 +994,7 @@ const getCachedProducts = unstable_cache(
 
 export async function getProducts() {
     try {
-        const result = await getCachedProducts();
-        if (!result.success) return result;
-        return { ...result, products: await Promise.all(result.products.map(presignProductView)) };
+        return await getCachedProducts();
     } catch (err) {
         console.error("Failed to fetch products:", err);
         return { success: false as const, error: "Database error" };
@@ -1080,15 +1089,14 @@ export async function getProductsForUser(userId: string | number) {
                   AND pc.status = 'show'
                 ORDER BY pc.name ASC, p.name ASC
             `;
-            return { success: true as const, products: products.map(toProductView) };
+            const presigned = await Promise.all(products.map(toProductView).map(presignProductView));
+            return { success: true as const, products: presigned };
         },
         [`user-products-v2-${userId}`],
         { revalidate: 300, tags: ["products", `user-products-${userId}`] }
     );
     try {
-        const result = await fetcher(userId as string);
-        if (!result.success) return result;
-        return { ...result, products: await Promise.all(result.products.map(presignProductView)) };
+        return await fetcher(userId as string);
     } catch (err) {
         console.error("Failed to fetch products for user:", err);
         return { success: false as const, error: "Database error" };

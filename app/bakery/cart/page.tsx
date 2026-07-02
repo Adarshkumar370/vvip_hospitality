@@ -18,6 +18,7 @@ import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import { validateCartProductLimits } from "@/app/bakery/actions";
 import { RupeeAmount } from "@/components/ui/RupeeAmount";
+import { getSafeImageSrc } from "@/lib/image-utils";
 import StockLimitModal, { StockViolation } from "@/components/bakery/StockLimitModal";
 
 export default function CartPage() {
@@ -170,7 +171,7 @@ export default function CartPage() {
                                 {/* Image */}
                                 <div className="relative w-20 h-20 sm:w-24 sm:h-24 flex-shrink-0 rounded-xl overflow-hidden bg-brand-soft-gray">
                                     <Image
-                                        src={item.image}
+                                        src={getSafeImageSrc(item.image)}
                                         alt={item.name}
                                         fill
                                         className="object-cover"
