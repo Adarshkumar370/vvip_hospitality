@@ -50,9 +50,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 return;
             }
 
+            let userData: User;
             try {
                 const parsed = JSON.parse(savedUser);
-                const userData: User = parsed?.user || parsed;
+                userData = parsed?.user || parsed;
                 const expiresAt = Number(parsed?.expiresAt || 0);
 
                 if (!expiresAt || Date.now() > expiresAt) {
@@ -63,23 +64,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     }
                     return;
                 }
+            } catch (e) {
+                console.error("Failed to parse saved user", e);
+                localStorage.removeItem(USER_STORAGE_KEY);
+                if (isMounted) {
+                    setUser(null);
+                    setIsLoading(false);
+                }
+                return;
+            }
 
+            // Show the cached session immediately so the navbar reflects the real
+            // (httpOnly-cookie-backed) login state without waiting on a round trip.
+            // The actual data-access gate is always the server-side session check
+            // (getUserSession) on protected pages, so this is safe to show optimistically.
+            if (isMounted) setUser(userData);
+
+            try {
                 const res = await syncUserSession(userData);
                 if (!isMounted) return;
 
                 if (res?.success && res.user) {
                     setUser(res.user);
                     persistUser(res.user);
-                } else {
+                } else if (!("alreadySynced" in (res || {}))) {
+                    // Server explicitly confirmed the session is expired/invalid.
                     setUser(null);
                     localStorage.removeItem(USER_STORAGE_KEY);
                 }
+                // "alreadySynced" means the confirmation call couldn't refresh the
+                // record (e.g. a transient lookup hiccup) but didn't invalidate the
+                // session either — keep the optimistic cached user as-is.
             } catch (e) {
-                console.error("Failed to restore saved user", e);
-                localStorage.removeItem(USER_STORAGE_KEY);
-                if (isMounted) {
-                        setUser(null);
-                }
+                // Network/DB error while confirming the session — don't log the user
+                // out over a transient failure; keep the optimistic cached user.
+                console.error("Failed to confirm session, keeping cached session", e);
             } finally {
                 if (isMounted) setIsLoading(false);
             }
