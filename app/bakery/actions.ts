@@ -1,7 +1,7 @@
 "use server";
 
 import sql from "@/lib/db";
-import s3Client from "@/lib/s3";
+import s3Client, { buildStorageIdentifierUrl, getPresignedObjectUrl, stripPresignQuery, toSignedUrl } from "@/lib/s3";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
@@ -287,7 +287,7 @@ async function getUserBillingSummaryInternal(userId: string) {
         ORDER BY o.created_at DESC
     `;
 
-    const orderViews = orders.map(toOrderView);
+    const orderViews = await Promise.all(orders.map(toOrderView).map(presignOrderView));
     const pendingAmount = orderViews.reduce((sum: number, order: any) => sum + Number(order.total_price || 0), 0);
     const creditLimit = Number(user.credit_limit || 0);
 
@@ -447,17 +447,19 @@ function toAddressView(address: any) {
     };
 }
 
-function getStoragePublicUrl(bucket: string, key: string) {
-    if (process.env.SUPABASE_PUBLIC_STORAGE_URL) {
-        return `${process.env.SUPABASE_PUBLIC_STORAGE_URL.replace(/\/$/, "")}/${bucket}/${key}`;
-    }
+async function presignProductView<T extends { image?: string | null }>(product: T): Promise<T> {
+    return { ...product, image: (await toSignedUrl(product.image)) || product.image };
+}
 
-    if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
-        return `${process.env.NEXT_PUBLIC_SUPABASE_URL.replace(/\/$/, "")}/storage/v1/object/public/${bucket}/${key}`;
-    }
-
-    const projectId = process.env.SUPABASE_PROJECT_ID;
-    return `https://${projectId}.supabase.co/storage/v1/object/public/${bucket}/${key}`;
+async function presignOrderView<T extends { invoice_pdf_url?: string | null; items?: any[] }>(order: T): Promise<T> {
+    const [invoicePdfUrl, items] = await Promise.all([
+        toSignedUrl(order.invoice_pdf_url),
+        Promise.all((order.items || []).map(async (item: any) => ({
+            ...item,
+            product_image: (await toSignedUrl(item.product_image)) || item.product_image,
+        }))),
+    ]);
+    return { ...order, invoice_pdf_url: invoicePdfUrl, items };
 }
 
 function isServerUploadFile(value: FormDataEntryValue): boolean {
@@ -981,7 +983,9 @@ const getCachedProducts = unstable_cache(
 
 export async function getProducts() {
     try {
-        return await getCachedProducts();
+        const result = await getCachedProducts();
+        if (!result.success) return result;
+        return { ...result, products: await Promise.all(result.products.map(presignProductView)) };
     } catch (err) {
         console.error("Failed to fetch products:", err);
         return { success: false as const, error: "Database error" };
@@ -1082,7 +1086,9 @@ export async function getProductsForUser(userId: string | number) {
         { revalidate: 300, tags: ["products", `user-products-${userId}`] }
     );
     try {
-        return await fetcher(userId as string);
+        const result = await fetcher(userId as string);
+        if (!result.success) return result;
+        return { ...result, products: await Promise.all(result.products.map(presignProductView)) };
     } catch (err) {
         console.error("Failed to fetch products for user:", err);
         return { success: false as const, error: "Database error" };
@@ -1108,7 +1114,7 @@ export async function addProduct(product: { name: string, category: string, pric
                 )
                 VALUES (
                     ${parsed.data.name}, ${slugify(parsed.data.name)}, ${category.id}, ${unit.id},
-                    ${parsed.data.image}, ${parsed.data.price}, ${parsed.data.description},
+                    ${stripPresignQuery(parsed.data.image)}, ${parsed.data.price}, ${parsed.data.description},
                     ${parsed.data.max_daily_limit}, 'show'
                 )
                 RETURNING *
@@ -1122,7 +1128,7 @@ export async function addProduct(product: { name: string, category: string, pric
             };
         });
         revalidatePath("/bakery", "layout");
-        return { success: true as const, product: toProductView(newProduct) };
+        return { success: true as const, product: await presignProductView(toProductView(newProduct)) };
     } catch (err) {
         console.error("Failed to add product:", err);
         return { success: false as const, error: "Failed to add product" };
@@ -1242,7 +1248,7 @@ export async function updateProduct(id: string | number, product: { name: string
                     category_id = ${category.id},
                     unit_id = ${unit.id},
                     price = ${parsed.data.price},
-                    image_url = ${parsed.data.image},
+                    image_url = ${stripPresignQuery(parsed.data.image)},
                     short_description = ${parsed.data.description},
                     max_daily_limit = ${parsed.data.max_daily_limit}
                 WHERE id = ${id}
@@ -1257,7 +1263,7 @@ export async function updateProduct(id: string | number, product: { name: string
             } : null;
         });
         revalidatePath("/bakery", "layout");
-        return { success: true as const, product: toProductView(updated) };
+        return { success: true as const, product: await presignProductView(toProductView(updated)) };
     } catch (err) {
         console.error("Failed to update product:", err);
         return { success: false as const, error: "Failed to update product" };
@@ -1293,7 +1299,7 @@ export async function uploadImage(formData: FormData) {
         if (!hasAllowedImageSignature(buffer, file.type)) {
             return { success: false, error: "Invalid image content. The file does not match its declared type." };
         }
-        const bucket = process.env.SUPABASE_STORAGE_BUCKET || "products";
+        const bucket = process.env.STORAGE_S3_BUCKET || "vvip-bucket";
 
         const command = new PutObjectCommand({
             Bucket: bucket,
@@ -1304,9 +1310,7 @@ export async function uploadImage(formData: FormData) {
 
         await s3Client.send(command);
 
-        const publicUrl = getStoragePublicUrl(bucket, filePath);
-
-        return { success: true, url: publicUrl };
+        return { success: true, url: await getPresignedObjectUrl(bucket, filePath) };
     } catch (err: any) {
         console.error("Image upload failed:", err);
         return {
@@ -1583,7 +1587,8 @@ export async function getOrders() {
             ORDER BY o.created_at DESC
         `;
         const actorRole = auth.actor === "staff" ? auth.staff.role : "admin";
-        return { success: true as const, orders: orders.map(toOrderView).filter((order: any) => isOrderVisibleToRole(order, actorRole)).map((order: any) => redactOrderForRole(order, actorRole)) };
+        const visibleOrders = orders.map(toOrderView).filter((order: any) => isOrderVisibleToRole(order, actorRole)).map((order: any) => redactOrderForRole(order, actorRole));
+        return { success: true as const, orders: await Promise.all(visibleOrders.map(presignOrderView)) };
     } catch (err) {
         console.error("Failed to fetch orders:", err);
         return { success: false as const, error: "Database error" };
@@ -1680,22 +1685,30 @@ export async function getOrderFeedbackTickets() {
 
         return {
             success: true as const,
-            tickets: tickets.map((ticket: any) => ({
-                id: ticket.id,
-                order_id: ticket.order_id,
-                user_id: ticket.user_id,
-                issue_type: ticket.issue_type,
-                description: ticket.description,
-                image_urls: Array.isArray(ticket.image_urls) ? ticket.image_urls : [],
-                status: ticket.status,
-                created_at: ticket.created_at,
-                updated_at: ticket.updated_at,
-                order_number: ticket.order_number,
-                order_status: toLegacyOrderStatus(ticket.order_status),
-                total_price: Number(ticket.total_amount || 0),
-                user_name: combineName(ticket.first_name, ticket.last_name),
-                user_email: ticket.email,
-                user_phone: denormalizeMobileNo(ticket.mobile_no),
+            tickets: await Promise.all(tickets.map(async (ticket: any) => {
+                const images = Array.isArray(ticket.image_urls) ? ticket.image_urls : [];
+                return {
+                    id: ticket.id,
+                    order_id: ticket.order_id,
+                    user_id: ticket.user_id,
+                    issue_type: ticket.issue_type,
+                    description: ticket.description,
+                    image_urls: await Promise.all(images.map(async (image: any) => ({
+                        ...image,
+                        url: image?.bucket && image?.key
+                            ? await getPresignedObjectUrl(image.bucket, image.key)
+                            : image?.url,
+                    }))),
+                    status: ticket.status,
+                    created_at: ticket.created_at,
+                    updated_at: ticket.updated_at,
+                    order_number: ticket.order_number,
+                    order_status: toLegacyOrderStatus(ticket.order_status),
+                    total_price: Number(ticket.total_amount || 0),
+                    user_name: combineName(ticket.first_name, ticket.last_name),
+                    user_email: ticket.email,
+                    user_phone: denormalizeMobileNo(ticket.mobile_no),
+                };
             })),
         };
     } catch (err) {
@@ -2020,7 +2033,7 @@ export async function retryStaffInvoiceGeneration(orderId: string) {
         );
         return {
             success: true as const,
-            invoicePdfUrl: invoice.invoicePdfUrl,
+            invoicePdfUrl: await toSignedUrl(invoice.invoicePdfUrl),
             invoiceNumber: invoice.invoiceNumber,
         };
     } catch (err: any) {
@@ -2255,7 +2268,7 @@ export async function getUserOrders(userId: string | number) {
             GROUP BY o.id, inv.invoice_number, inv.invoice_pdf_url
             ORDER BY o.created_at DESC
         `;
-        return { success: true, orders: orders.map(toOrderView) };
+        return { success: true, orders: await Promise.all(orders.map(toOrderView).map(presignOrderView)) };
     } catch (err) {
         console.error("Failed to fetch user orders:", err);
         return { success: false, error: "Database error" };
@@ -2339,7 +2352,7 @@ export async function submitOrderIssue(formData: FormData) {
             return { success: false as const, error: "You can upload up to 3 images." };
         }
 
-        const bucket = process.env.SUPABASE_ORDER_FEEDBACK_BUCKET || "order-feedback";
+        const bucket = process.env.STORAGE_S3_BUCKET || "vvip-bucket";
         const uploadedImages: Array<{
             url: string;
             bucket: string;
@@ -2383,7 +2396,7 @@ export async function submitOrderIssue(formData: FormData) {
             }
 
             uploadedImages.push({
-                url: getStoragePublicUrl(bucket, key),
+                url: buildStorageIdentifierUrl(bucket, key),
                 bucket,
                 key,
                 contentType: file.type,
@@ -2637,7 +2650,7 @@ export async function verifyRazorpayPayment(
                     INVOICE_API_TIMEOUT_MS,
                     "Invoice generation"
                 );
-                return { success: true, invoice };
+                return { success: true, invoice: { ...invoice, invoicePdfUrl: await toSignedUrl(invoice.invoicePdfUrl) } };
             } catch (invoiceErr) {
                 console.error("Invoice PDF upload failed after successful payment:", invoiceErr);
                 return {
@@ -3421,7 +3434,7 @@ export async function retryInvoiceGeneration(orderId: string, userId: string) {
             INVOICE_API_TIMEOUT_MS,
             "Invoice generation"
         );
-        return { success: true, invoicePdfUrl: invoice.invoicePdfUrl, invoiceNumber: invoice.invoiceNumber };
+        return { success: true, invoicePdfUrl: await toSignedUrl(invoice.invoicePdfUrl), invoiceNumber: invoice.invoiceNumber };
     } catch (err: any) {
         console.error("Failed to retry invoice generation:", err);
         return {
