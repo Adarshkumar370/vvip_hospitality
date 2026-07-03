@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Phone, Lock, ArrowRight, CheckCircle2, Loader2, Smartphone, User, Mail } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { registerUser, verifyFirebaseToken, loginUser } from "@/app/bakery/actions";
+import { registerUser, verifyFirebaseToken, loginUser, warmDatabase } from "@/app/bakery/actions";
 import { useAuth } from "@/context/AuthContext";
 import { RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult } from "firebase/auth";
 import { auth } from "@/lib/firebase/client";
@@ -72,6 +72,12 @@ export default function AuthModal({ isOpen, onClose, redirectTo = "/bakery/order
             setError("");
             setConfirmationResult(null);
             clearRecaptcha();
+        } else {
+            // Kick the serverless DB awake as soon as the modal opens, so it's
+            // already warm by the time the post-OTP login check runs instead
+            // of that check being the first query. Never awaited, so it
+            // can't delay the modal opening.
+            warmDatabase().catch(() => {});
         }
     }, [isOpen]);
 
@@ -165,14 +171,25 @@ export default function AuthModal({ isOpen, onClose, redirectTo = "/bakery/order
         }
     };
 
-    const handlePostAuthCheck = async () => {
+    const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    // The phone is already verified server-side (10-minute TTL), so retrying
+    // this just re-runs the DB lookup — no need to ask for a fresh OTP. Only
+    // an explicit "not found" should route to signup; any other failure is
+    // treated as transient (e.g. serverless DB cold start) and retried.
+    const handlePostAuthCheck = async (attempt = 0) => {
         const result = await loginUser(phone);
         if (result.success && result.user) {
             login(result.user as any);
             onClose();
             router.push(redirectTo);
-        } else {
+        } else if ((result as { notFound?: boolean }).notFound) {
             setStep("signup");
+        } else if (attempt < 2) {
+            await sleep(1500);
+            await handlePostAuthCheck(attempt + 1);
+        } else {
+            setError(result.error || "Something went wrong. Please try again.");
         }
     };
 

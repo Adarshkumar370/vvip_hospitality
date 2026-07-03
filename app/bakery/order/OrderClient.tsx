@@ -264,6 +264,7 @@ export default function OrderClient({ initialProducts, initialCategories, user: 
                                             src={product.image || "https://images.unsplash.com/photo-1509440159596-0249088772ff?q=80&w=800&auto=format&fit=crop"}
                                             alt={product.name}
                                             fill
+                                            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
                                             className="object-cover transition-transform duration-700 group-hover:scale-110"
                                         />
                                         <div className="absolute left-6 top-6 flex flex-col gap-2">

@@ -9,6 +9,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
         "/bakery",
         "/contact",
         "/olive-stayz",
+        "/olive-stayz/rooms",
+        "/olive-stayz/facilities",
+        "/olive-stayz/gallery",
         "/privacy-policy",
         "/terms-of-service",
     ];
@@ -17,6 +20,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
         url: `${baseUrl}${route}`,
         lastModified: new Date(),
         changeFrequency: "weekly",
-        priority: route === "" ? 1 : 0.8,
+        priority: route === "" ? 1 : route.split("/").length > 2 ? 0.6 : 0.8,
     }));
 }

@@ -532,7 +532,7 @@ export function PricingView() {
                                             <div key={product.id} className="flex items-center justify-between p-4 bg-brand-soft-gray/50 rounded-2xl group border border-transparent hover:border-brand-gold-bright/20 transition-all">
                                                 <div className="flex items-center gap-4">
                                                     <div className="w-12 h-12 bg-white rounded-xl overflow-hidden shadow-sm relative">
-                                                        <Image src={product.image} alt={product.name} fill className="object-cover" />
+                                                        <Image src={product.image} alt={product.name} fill sizes="48px" className="object-cover" />
                                                     </div>
                                                     <div>
                                                         <p className="text-sm font-black text-brand-olive-dark">{product.name}</p>
@@ -2021,7 +2021,7 @@ function EditProductModal({ product, categories, onClose, onSave, isSubmitting }
                                 <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-4">Product Image</label>
                                 <div className="relative group p-6 bg-brand-soft-gray rounded-[2rem] border-2 border-dashed border-gray-200 hover:border-brand-gold-bright/30 transition-all text-center">
                                     <div className="relative w-full max-w-sm mx-auto aspect-video rounded-xl overflow-hidden shadow-lg mb-4 bg-white">
-                                        <Image src={data.image} alt="Preview" fill className="object-cover" />
+                                        <Image src={data.image} alt="Preview" fill sizes="(max-width: 640px) 100vw, 384px" className="object-cover" />
                                         <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-all flex items-center justify-center">
                                             <div className="bg-white/90 backdrop-blur-sm p-4 rounded-full text-brand-olive-dark transform scale-0 group-hover:scale-100 transition-all duration-300">
                                                 <Camera size={24} />
@@ -2203,7 +2203,7 @@ function AddProductModal({ categories, onClose, onAdd, isSubmitting }: AddProduc
                                 <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-4">Product Image</label>
                                 <div className="relative group p-6 bg-brand-soft-gray rounded-[2rem] border-2 border-dashed border-gray-200 hover:border-brand-gold-bright/30 transition-all text-center">
                                     <div className="relative w-full max-w-sm mx-auto aspect-video rounded-xl overflow-hidden shadow-lg mb-4 bg-white">
-                                        <Image src={data.image} alt="Preview" fill className="object-cover" />
+                                        <Image src={data.image} alt="Preview" fill sizes="(max-width: 640px) 100vw, 384px" className="object-cover" />
                                         <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-all flex items-center justify-center">
                                             <div className="bg-white/90 backdrop-blur-sm p-4 rounded-full text-brand-olive-dark transform scale-0 group-hover:scale-100 transition-all duration-300">
                                                 <Camera size={24} />
@@ -2280,7 +2280,7 @@ function ProductRow({ product, onEdit, onDelete, onLimitUpdate, isUpdating }: {
         <div className="flex flex-col md:flex-row items-center justify-between p-6 bg-brand-soft-gray/50 rounded-2xl group border border-transparent hover:border-brand-gold-bright/20 transition-all gap-6">
             <div className="flex items-center gap-6 flex-1 w-full">
                 <div className="w-16 h-16 bg-white rounded-2xl overflow-hidden shadow-sm relative shrink-0">
-                    <Image src={product.image} alt={product.name} fill className="object-cover" />
+                    <Image src={product.image} alt={product.name} fill sizes="64px" className="object-cover" />
                 </div>
                 <div className="flex-1">
                     <p className="text-lg font-black text-brand-olive-dark">{product.name}</p>

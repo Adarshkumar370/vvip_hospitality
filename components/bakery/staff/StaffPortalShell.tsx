@@ -1822,7 +1822,7 @@ function StaffCreateOrderPanel({ onOrderPlaced }: { onOrderPlaced: () => Promise
                                     <div key={product.id} className="grid gap-4 rounded-[2rem] bg-brand-soft-gray/50 p-4 md:grid-cols-[1fr_8rem] md:items-center">
                                         <div className="flex items-center gap-4">
                                             <div className="relative h-14 w-14 overflow-hidden rounded-xl bg-white shadow-sm">
-                                                <Image src={product.image || "/images/bakery/sourdough.png"} alt={product.name} fill className="object-cover" />
+                                                <Image src={product.image || "/images/bakery/sourdough.png"} alt={product.name} fill sizes="56px" className="object-cover" />
                                             </div>
                                             <div>
                                                 <p className="text-sm font-black text-brand-olive-dark">{product.name}</p>
@@ -1934,7 +1934,7 @@ function OrderCard({
                     {order.items.map((item) => (
                         <div key={item.id} className="flex items-center gap-4 rounded-2xl bg-brand-soft-gray/50 p-4">
                             <div className="relative h-12 w-12 overflow-hidden rounded-xl shadow-sm">
-                                <Image src={item.product_image} alt={item.product_name} fill className="object-cover" />
+                                <Image src={item.product_image} alt={item.product_name} fill sizes="48px" className="object-cover" />
                             </div>
                             <div>
                                 <p className="text-sm font-black leading-tight text-brand-olive-dark">{item.product_name}</p>

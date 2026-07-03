@@ -169,6 +169,7 @@ export default function CartDrawer({ isOpen, onClose, onRequireAuth }: CartDrawe
                                                 src={getSafeImageSrc(item.image)}
                                                 alt={item.name}
                                                 fill
+                                                sizes="96px"
                                                 className="object-cover transition-transform group-hover:scale-110"
                                             />
                                         </div>

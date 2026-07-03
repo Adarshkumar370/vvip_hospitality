@@ -838,6 +838,13 @@ export async function loginUser(phone: string) {
     if (!verified.success) return verified;
 
     const result = await checkUser(phone);
+    // checkUser collapses DB failures into exists:false — surface those as a
+    // retryable error instead of letting them read as "not registered", since
+    // a cold-start DB hiccup here would otherwise send existing customers to
+    // the signup form.
+    if (result.error) {
+        return { success: false as const, error: result.error };
+    }
     if (result.exists && result.user) {
         const session = await getIronSession<UserSessionData>(await cookies(), userSessionOptions);
         session.user = result.user as any;
@@ -846,7 +853,17 @@ export async function loginUser(phone: string) {
         await session.save();
         return { success: true, user: result.user };
     }
-    return { success: false, error: "User not found" };
+    return { success: false as const, error: "User not found", notFound: true as const };
+}
+
+// Fire-and-forget ping so the AuthModal can kick the serverless DB awake as
+// soon as it opens, instead of the login check being the first query.
+export async function warmDatabase() {
+    try {
+        await sql`SELECT 1`;
+    } catch {
+        // Best-effort only; the actual login/checkUser call still retries.
+    }
 }
 
 export async function syncUserSession(_user: { id: string | number, name: string, email: string, phone: string }) {
