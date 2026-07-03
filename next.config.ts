@@ -15,8 +15,8 @@ const securityHeaders = [
       "default-src 'self'",
       // Railway/Tigris object storage, Unsplash, and Pravatar for images
       "img-src 'self' https://t3.storageapi.dev https://images.unsplash.com https://i.pravatar.cc data: blob:",
-      // Next.js requires unsafe-eval in dev; gstatic.com for Firebase reCAPTCHA script
-      "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://checkout.razorpay.com https://www.google.com https://www.gstatic.com",
+      // Next.js requires unsafe-eval in dev; gstatic.com/apis.google.com for Firebase reCAPTCHA Enterprise's gapi loader
+      "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://checkout.razorpay.com https://www.google.com https://www.gstatic.com https://apis.google.com",
       "style-src 'self' 'unsafe-inline'",
       // Razorpay and Firebase Auth / reCAPTCHA APIs
       "connect-src 'self' https://api.razorpay.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://firebaseinstallations.googleapis.com https://firebase.googleapis.com https://www.google.com https://recaptcha.google.com",
